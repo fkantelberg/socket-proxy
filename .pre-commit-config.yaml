@@ -6,7 +6,7 @@ repos:
         language: system
         entry: black
         require_serial: true
-        types: [python3]
+        types: [python]
 
   - repo: https://gitlab.com/pycqa/flake8
     rev: 3.7.9
