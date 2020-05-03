@@ -14,18 +14,14 @@ setup(
     author="...",
     author_email="...",
     description="...",
-    long_description=read('README.md'),
-    long_description_content_type='text/markdown',
+    long_description=read("README.md"),
+    long_description_content_type="text/markdown",
     license="MIT",
     keywords="proxy socket",
     url="...",
     packages=find_packages("src"),
     package_dir={"": "src"},
-    package_name="socket-proxy",
     include_package_data=True,
-    entry_points={
-        'console_scripts':
-            ['socket-proxy = socket_proxy.main:main'],
-    },
+    entry_points={"console_scripts": ["socket_proxy = socket_proxy.main:main"]},
     python_requires=">=3.7",
 )

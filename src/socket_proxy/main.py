@@ -3,10 +3,10 @@ import argparse
 import logging
 import sys
 
-from base import DEFAULT_LOG_LEVEL, DEFAULT_PORT, LOG_LEVELS
-from proxy import ProxyServer
-from tunnel import TunnelClient
-from utils import configure_logging, parse_address, valid_file
+from .base import DEFAULT_LOG_LEVEL, DEFAULT_PORT, LOG_LEVELS
+from .proxy import ProxyServer
+from .tunnel import TunnelClient
+from .utils import configure_logging, parse_address, valid_file
 
 _logger = logging.getLogger(__name__)
 
@@ -101,8 +101,8 @@ def connection_group(parser, server: bool):
         )
 
 
-def option_group(parser, server: bool):
-    group = parser.add_argument_group("Options")
+def logging_group(parser):
+    group = parser.add_argument_group("Logging")
     group.add_argument(
         "--log-file",
         help="File to use for logging. If not set logs will be put to stdout.",
@@ -113,6 +113,10 @@ def option_group(parser, server: bool):
         default="DEBUG",
         help=f"Set the log level to use. Default is {DEFAULT_LOG_LEVEL}.",
     )
+
+
+def option_group(parser, server: bool):
+    group = parser.add_argument_group("Options")
     group.add_argument(
         "--ban-time",
         type=int,
@@ -144,10 +148,11 @@ def option_group(parser, server: bool):
         )
 
 
-def parse_args():
+def parse_args(args=None):
     parser = argparse.ArgumentParser(
         formatter_class=CustomHelpFormatter, prog="", description=""
     )
+    logging_group(parser)
 
     sub = parser.add_subparsers(dest="mode")
 
@@ -159,6 +164,7 @@ def parse_args():
     security_group(client, False)
     connection_group(client, False)
     option_group(client, False)
+    logging_group(client)
 
     server = sub.add_parser(
         "server",
@@ -168,8 +174,9 @@ def parse_args():
     security_group(server, True)
     connection_group(server, True)
     option_group(server, True)
+    logging_group(server)
 
-    return parser.parse_args()
+    return parser.parse_args(args)
 
 
 def run_client(args):
@@ -189,7 +196,7 @@ def run_client(args):
         max_connects=args.max_connects,
         verify_hostname=not args.no_verify_hostname,
     )
-    cli.run()
+    cli.start()
 
 
 def run_server(args):
@@ -208,11 +215,11 @@ def run_server(args):
         max_connects=args.max_connects,
         max_tunnels=args.max_tunnels,
     )
-    server.run()
+    server.start()
 
 
-def main():
-    args = parse_args()
+def main(args=None):
+    args = parse_args(args)
 
     configure_logging(args.log_file, args.log_level)
 

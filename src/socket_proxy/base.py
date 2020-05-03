@@ -59,6 +59,3 @@ class Ban:
     def __init__(self):
         self.hits = 0
         self.first = datetime.now()
-
-    def __repr__(self):
-        return f"<Ban {self.first} [{self.hits}]>"

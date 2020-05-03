@@ -2,7 +2,7 @@ import ipaddress
 import logging
 import struct
 
-from base import (
+from .base import (
     CLIENT_NAME_SIZE,
     DuplicatePackageType,
     InvalidPackage,
@@ -84,8 +84,8 @@ class InitPackage(Package):
 
     def to_bytes(self):
         data = super().to_bytes() + self.INIT.pack(self.token, len(self.addresses))
-        for ip, port in self.addresses:
-            data += self.ADDRESS.pack(TransportType.from_ip(ip), port)
+        for ip_type, port in self.addresses:
+            data += self.ADDRESS.pack(ip_type, port)
         return data
 
     @classmethod

@@ -1,8 +1,8 @@
 import asyncio
 import logging
 
-from base import CLIENT_NAME_SIZE, InvalidPackage
-from package import ClientDataPackage, Package
+from .base import CLIENT_NAME_SIZE, InvalidPackage
+from .package import ClientDataPackage, Package
 
 _logger = logging.getLogger(__name__)
 
@@ -42,7 +42,7 @@ class Connection:
         await self.writer.wait_closed()
 
     async def tun_read(self):
-        return await Package.from_reader(self.reader)
+        return await Package.from_reader(self)
 
     async def tun_write(self, package):
         self.write(package.to_bytes())

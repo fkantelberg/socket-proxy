@@ -6,7 +6,7 @@ import ssl
 import sys
 from urllib.parse import urlsplit
 
-from base import CLIENT_NAME_SIZE, LOG_FORMAT, LOG_LEVELS
+from .base import CLIENT_NAME_SIZE, LOG_FORMAT, LOG_LEVELS
 
 _logger = logging.getLogger(__name__)
 
@@ -89,15 +89,17 @@ def parse_address(address, host=None, port=None):
     # Try parsing with fixed scheme
     try:
         parsed = urlsplit(f"http://{address}")
+        h, p = parsed.hostname, parsed.port
     except Exception:
         raise argparse.ArgumentTypeError(FORMAT_ERROR)
 
-    if not parsed.hostname and host is None:
+    # If host or port are None these must be parsed
+    if not h and host is None:
         raise argparse.ArgumentTypeError("Host required.")
-    if not parsed.port and port is None:
+    if not p and port is None:
         raise argparse.ArgumentTypeError("Port required.")
 
-    return parsed.hostname or host, parsed.port or port
+    return h or host, p or port
 
 
 # Check if a file exists and return the absolute path otherwise raise an error

@@ -4,16 +4,16 @@ import ipaddress
 import logging
 from datetime import datetime, timedelta
 
-from base import INTERVAL_TIME, Ban, ReachedClientLimit
-from connection import Connection
-from package import (
+from .base import INTERVAL_TIME, Ban, ReachedClientLimit, TransportType
+from .connection import Connection
+from .package import (
     ClientClosePackage,
     ClientDataPackage,
     ClientInitPackage,
     ConfigPackage,
     InitPackage,
 )
-from utils import generate_ssl_context, generate_token, merge_settings
+from .utils import generate_ssl_context, generate_token, merge_settings
 
 _logger = logging.getLogger(__name__)
 
@@ -67,7 +67,7 @@ class Tunnel:
         if client:
             await client.close()
 
-    async def _close(self):
+    async def close(self):
         for client in list(self.clients.values()):
             await client.close()
 
@@ -107,6 +107,8 @@ class TunnelClient(Tunnel):
         self.host, self.port = host, port
         self.dst_host, self.dst_port = dst_host, dst_port
         self.running = False
+        self.addresses = []
+        self.tunnel = None
 
         self.sc = generate_ssl_context(
             cert=cert, key=key, ca=ca, check_hostname=verify_hostname,
@@ -118,7 +120,7 @@ class TunnelClient(Tunnel):
             data = await client.read(self.chunk_size)
             if not data:
                 await self._disconnect_client(client.token)
-                return
+                break
 
             await self.tunnel.tun_data(client.token, data)
 
@@ -170,6 +172,7 @@ class TunnelClient(Tunnel):
             elif isinstance(package, ClientDataPackage):
                 await self._send_data(package)
             else:
+                _logger.error("Invalid package: %s", package)
                 break
 
     # Main client loop
@@ -181,13 +184,18 @@ class TunnelClient(Tunnel):
         try:
             await self._serve()
         finally:
-            await self._close()
+            await self.close()
             _logger.info("Tunnel %s:%s closed", self.host, self.port)
 
     # Start the client and the event loop
-    def run(self):
+    def start(self):
         _logger.info("Starting client...")
         asyncio.run(self.loop())
+
+    # Stop the client and the event loop
+    async def stop(self):
+        if self.tunnel:
+            await self.tunnel.close()
 
 
 # Server side of the tunnel to listen for external connections
@@ -252,6 +260,8 @@ class TunnelServer(Connection, Tunnel):
         # Initialize the tunnel by sending the appropiate data
         out = " ".join(sorted(f"{host}:{port}" for host, port in addresses))
         _logger.info("Tunnel %s listen on %s", self.uuid, out)
+
+        addresses = [(TransportType.from_ip(ip), port) for ip, port in addresses]
         await self.tun_write(InitPackage(self.token, addresses))
 
         # Start listening
@@ -275,6 +285,7 @@ class TunnelServer(Connection, Tunnel):
             elif isinstance(package, ClientDataPackage):
                 # Check for valid tokens
                 if package.token not in self:
+                    _logger.error("Invalid client token: %s", package.token)
                     break
 
                 conn = self[package.token]
@@ -282,11 +293,13 @@ class TunnelServer(Connection, Tunnel):
                 await conn.drain()
             # Invalid package means to close the connection
             else:
+                _logger.error("Invalid package: %s", package)
                 break
 
     # Close everything
-    async def _close(self):
-        await super()._close()
+    async def stop(self):
+        await Connection.close(self)
+        await Tunnel.close(self)
 
         self.server.close()
         await self.server.wait_closed()
@@ -305,4 +318,4 @@ class TunnelServer(Connection, Tunnel):
         try:
             await self._serve()
         finally:
-            await self._close()
+            await self.close()
