@@ -18,10 +18,15 @@ setup(
     long_description_content_type="text/markdown",
     license="MIT",
     keywords="proxy socket",
-    url="...",
+    url="https://github.com/fkantelberg/socket-proxy",
     packages=find_packages("src"),
     package_dir={"": "src"},
     include_package_data=True,
     entry_points={"console_scripts": ["socket_proxy = socket_proxy.main:main"]},
+    classifiers=[
+        "Programming Language :: Python :: 3",
+        "License :: OSI Approved :: MIT License",
+        "Operating System :: OS Independent",
+    ],
     python_requires=">=3.7",
 )

@@ -1,3 +1,6 @@
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+![PyPI - Python Version](https://img.shields.io/pypi/pyversions/socket-proxy)
+
 # socket-proxy
 
 This tool allows to forward TCP ports to a server and make them accessible through ports
