@@ -13,7 +13,7 @@ from .package import (
     ConfigPackage,
     InitPackage,
 )
-from .utils import generate_ssl_context, generate_token, merge_settings
+from .utils import generate_ssl_context, generate_token, get_unused_port, merge_settings
 
 _logger = logging.getLogger(__name__)
 
@@ -200,9 +200,10 @@ class TunnelClient(Tunnel):
 
 # Server side of the tunnel to listen for external connections
 class TunnelServer(Connection, Tunnel):
-    def __init__(self, reader, writer, **kwargs):
+    def __init__(self, reader, writer, *, ports=None, **kwargs):
         super().__init__(reader, writer, token=generate_token(), **kwargs)
         self.host, self.port = writer.get_extra_info("peername")[:2]
+        self.ports = ports
         self.connections = collections.defaultdict(Ban)
 
     async def idle(self):
@@ -312,7 +313,13 @@ class TunnelServer(Connection, Tunnel):
         )
 
         # Start to listen on an external port
-        self.server = await asyncio.start_server(self._client_accept, "", 0)
+        port = get_unused_port(*self.ports) if self.ports else 0
+        if port is None:
+            _logger.error("All ports are blocked")
+            await self.close()
+            return
+
+        self.server = await asyncio.start_server(self._client_accept, "", port)
         asyncio.create_task(self._client_loop(self.server))
 
         try:

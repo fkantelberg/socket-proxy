@@ -1,9 +1,12 @@
 import argparse
 import logging
 import os
+import re
 import secrets
+import socket
 import ssl
 import sys
+from random import shuffle
 from urllib.parse import urlsplit
 
 from .base import CLIENT_NAME_SIZE, LOG_FORMAT, LOG_LEVELS
@@ -70,6 +73,21 @@ def generate_ssl_context(
     return ctx
 
 
+# Returns a random unused port within the given range or None if all are used
+def get_unused_port(min_port, max_port):
+    sock = socket.socket()
+    ports = list(range(min_port, max_port + 1))
+    shuffle(ports)
+    for port in ports:
+        try:
+            sock.bind(("", port))
+            sock.close()
+            return port
+        except Exception:
+            pass
+    return None
+
+
 # Merge the settings of the tunnel
 #  if one of them is 0 the other one will take place
 #  otherwise the lower value will be used
@@ -109,3 +127,14 @@ def valid_file(path):
         raise argparse.ArgumentTypeError("Not a file.")
 
     return path
+
+
+# Check if the argument is a valid port range with IP family
+def valid_ports(ports):
+    m = re.match(r"^(\d+):(\d+)?$", ports, re.IGNORECASE)
+    if m:
+        a, b = map(int, m.groups())
+        if 0 < a < b < 65536:
+            return a, b
+        raise argparse.ArgumentTypeError("Port must be in range (1, 65536)")
+    raise argparse.ArgumentTypeError("Invalid port scheme.")

@@ -6,7 +6,7 @@ import sys
 from .base import DEFAULT_LOG_LEVEL, DEFAULT_PORT, LOG_LEVELS
 from .proxy import ProxyServer
 from .tunnel import TunnelClient
-from .utils import configure_logging, parse_address, valid_file
+from .utils import configure_logging, parse_address, valid_file, valid_ports
 
 _logger = logging.getLogger(__name__)
 
@@ -146,6 +146,12 @@ def option_group(parser, server: bool):
             default=0,
             help="Maximum number of tunnels. Only useful in server mode.",
         )
+        group.add_argument(
+            "--ports",
+            type=valid_ports,
+            default=None,
+            help="Range of ports to use for the sockets.",
+        )
 
 
 def parse_args(args=None):
@@ -214,6 +220,7 @@ def run_server(args):
         max_clients=args.max_clients,
         max_connects=args.max_connects,
         max_tunnels=args.max_tunnels,
+        ports=args.ports,
     )
     server.start()
 

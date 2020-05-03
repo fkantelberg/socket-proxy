@@ -1,5 +1,6 @@
 import argparse
 import ipaddress
+import socket
 
 import pytest
 from socket_proxy import base, utils
@@ -62,3 +63,25 @@ def test_valid_file():
     with pytest.raises(argparse.ArgumentTypeError):
         assert utils.valid_file(__file__ + "a")
     assert utils.valid_file(__file__) == __file__
+
+
+def test_unused_port():
+    assert utils.get_unused_port(5000, 4000) is None
+    # Just hope that one port is free
+    port = utils.get_unused_port(5000, 65535)
+    assert isinstance(port, int)
+
+    # Block a port and check it
+    sock = socket.socket()
+    sock.bind(("", port))
+    _, port = sock.getsockname()
+    assert utils.get_unused_port(port, port) is None
+    sock.close()
+
+
+def test_valid_ports():
+    for fail in [":", "0", "0:6000", "5000:90000", "6000:5000"]:
+        with pytest.raises(argparse.ArgumentTypeError):
+            utils.valid_ports(fail)
+
+    assert utils.valid_ports("5000:6000") == (5000, 6000)

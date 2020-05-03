@@ -266,3 +266,9 @@ async def test_tunnel_server():
     # Send a client data package with invalid token
     tun.return_value = package.ClientDataPackage(b"abc", b"\xff")
     await server._serve()
+
+    # Test a blocked port with impossible range
+    server.ports = (5000, 4000)
+    server.server = None
+    await server.loop()
+    assert server.server is None

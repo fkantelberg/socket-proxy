@@ -1,4 +1,5 @@
 #!/bin/bash
+# Script to creating a with a CA signed client/server certificates
 
 CURVE=prime256v1
 DAYS=365

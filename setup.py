@@ -11,9 +11,9 @@ def read(fname):
 setup(
     name="socket-proxy",
     version="0.1",
-    author="...",
-    author_email="...",
-    description="...",
+    author="Florian Kantelberg",
+    author_email="florian.kantelberg@mailbox.org",
+    description="Proxy TCP ports of local systems",
     long_description=read("README.md"),
     long_description_content_type="text/markdown",
     license="MIT",
