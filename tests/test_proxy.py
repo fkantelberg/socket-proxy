@@ -1,6 +1,7 @@
 import asyncio
 import ssl
 import subprocess
+import time
 from datetime import datetime
 from unittest import mock
 
@@ -184,8 +185,28 @@ async def test_tunnel_client_management():
 
     # Close the tunnel with clients
     tun.add(cli)
-    await tun.close()
+    await tun.stop()
     assert cli.close.call_count
+
+
+@pytest.mark.asyncio
+async def test_tunnel_timeout():
+    tun = tunnel.Tunnel(max_clients=1)
+    tun.stop = mock.AsyncMock()
+    tun.tunnel = mock.MagicMock()
+
+    tun.tunnel.last_time = time.time()
+    tun.idle_timeout = 0
+    await tun.idle()
+    assert tun.stop.call_count == 0
+
+    tun.tunnel.last_time -= 10
+    await tun.idle()
+    assert tun.stop.call_count == 0
+
+    tun.idle_timeout = 5
+    await tun.idle()
+    assert tun.stop.call_count
 
 
 @pytest.mark.asyncio
@@ -252,11 +273,11 @@ async def test_tunnel_server():
 
     # Test client data packages
     token = b"\x00" * base.CLIENT_NAME_SIZE
-    m = server.clients[token] = mock.MagicMock()
+    m = server.clients[token] = mock.AsyncMock()
     m.write = raiseAssert
 
     tun = mock.AsyncMock()
-    server.tun_read = tun
+    server.tunnel.tun_read = tun
 
     # Send a valid client data package
     tun.return_value = package.ClientDataPackage(b"abc", token)

@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 
 from .base import CLIENT_NAME_SIZE, InvalidPackage
 from .package import ClientDataPackage, Package
@@ -14,6 +15,7 @@ class Connection:
         self.reader, self.writer = reader, writer
         self.token = token or b""
         self.bytes_in = self.bytes_out = 0
+        self.last_time = time.time()
 
     @property
     def uuid(self):
@@ -51,15 +53,18 @@ class Connection:
     async def readexactly(self, size):
         data = await self.reader.readexactly(size)
         self.bytes_in += size
+        self.last_time = time.time()
         return data
 
     async def read(self, size):
         data = await self.reader.read(size)
         self.bytes_in += len(data)
+        self.last_time = time.time()
         return data
 
     def write(self, data):
         self.bytes_out += len(data)
+        self.last_time = time.time()
         return self.writer.write(data)
 
     async def drain(self):

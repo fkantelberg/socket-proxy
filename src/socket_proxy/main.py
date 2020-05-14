@@ -139,6 +139,12 @@ def option_group(parser, server: bool):
         "certain time span. Disabled if 0. If set on both sites of the tunnel "
         " the lower number is used.",
     )
+    group.add_argument(
+        "--idle-timeout",
+        type=int,
+        default=None,
+        help="Timeout until the tunnel closes without interaction.",
+    )
     if server:
         group.add_argument(
             "--max-tunnels",
@@ -200,6 +206,7 @@ def run_client(args):
         bantime=args.ban_time,
         max_clients=args.max_clients,
         max_connects=args.max_connects,
+        idle_timeout=args.idle_timeout,
         verify_hostname=not args.no_verify_hostname,
     )
     cli.start()
@@ -220,6 +227,7 @@ def run_server(args):
         max_clients=args.max_clients,
         max_connects=args.max_connects,
         max_tunnels=args.max_tunnels,
+        idle_timeout=args.idle_timeout,
         ports=args.ports,
     )
     server.start()

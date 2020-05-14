@@ -2,6 +2,7 @@ import asyncio
 import collections
 import ipaddress
 import logging
+import time
 from datetime import datetime, timedelta
 
 from .base import INTERVAL_TIME, Ban, ReachedClientLimit, TransportType
@@ -20,20 +21,37 @@ _logger = logging.getLogger(__name__)
 
 class Tunnel:
     def __init__(
-        self, *, bantime=60, chunk_size=1024, max_clients=0, max_connects=0, **kwargs,
+        self,
+        *,
+        bantime=60,
+        chunk_size=1024,
+        max_clients=0,
+        max_connects=0,
+        idle_timeout=None,
+        **kwargs,
     ):
         super().__init__(**kwargs)
+        self.tunnel = None
         self.clients = {}
         self.bantime = bantime
         self.chunk_size = chunk_size
         self.max_clients = max_clients
         self.max_connects = max_connects
+        self.idle_timeout = idle_timeout
 
     def __contains__(self, token):
         return token in self.clients
 
     def __getitem__(self, token):
         return self.clients[token]
+
+    @property
+    def token(self):
+        return self.tunnel.token
+
+    @property
+    def uuid(self):
+        return self.tunnel.uuid
 
     def add(self, client):
         if client.token in self.clients:
@@ -67,12 +85,17 @@ class Tunnel:
         if client:
             await client.close()
 
-    async def close(self):
+    async def idle(self):
+        if self.idle_timeout and self.tunnel:
+            if time.time() - self.tunnel.last_time > self.idle_timeout:
+                await self.stop()
+
+    async def stop(self):
         for client in list(self.clients.values()):
             await client.close()
 
-    async def idle(self):
-        pass
+        if self.tunnel:
+            await self.tunnel.close()
 
     async def _serve(self):
         asyncio.create_task(self._interval())
@@ -103,12 +126,10 @@ class TunnelClient(Tunnel):
         **kwargs,
     ):
         super().__init__(**kwargs)
-
         self.host, self.port = host, port
         self.dst_host, self.dst_port = dst_host, dst_port
         self.running = False
         self.addresses = []
-        self.tunnel = None
 
         self.sc = generate_ssl_context(
             cert=cert, key=key, ca=ca, check_hostname=verify_hostname,
@@ -182,9 +203,11 @@ class TunnelClient(Tunnel):
         _logger.info("Forwarding to %s:%s", self.dst_host, self.dst_port)
 
         try:
+            self.running = True
             await self._serve()
         finally:
-            await self.close()
+            self.running = False
+            await self.stop()
             _logger.info("Tunnel %s:%s closed", self.host, self.port)
 
     # Start the client and the event loop
@@ -192,16 +215,12 @@ class TunnelClient(Tunnel):
         _logger.info("Starting client...")
         asyncio.run(self.loop())
 
-    # Stop the client and the event loop
-    async def stop(self):
-        if self.tunnel:
-            await self.tunnel.close()
-
 
 # Server side of the tunnel to listen for external connections
-class TunnelServer(Connection, Tunnel):
+class TunnelServer(Tunnel):
     def __init__(self, reader, writer, *, ports=None, **kwargs):
-        super().__init__(reader, writer, token=generate_token(), **kwargs)
+        super().__init__(**kwargs)
+        self.tunnel = Connection(reader, writer, token=generate_token())
         self.host, self.port = writer.get_extra_info("peername")[:2]
         self.ports = ports
         self.connections = collections.defaultdict(Ban)
@@ -238,7 +257,7 @@ class TunnelServer(Connection, Tunnel):
         _logger.info("Client %s connected on %s:%s", client.uuid, host, port)
 
         # Inform the tunnel about the new client
-        await self.tun_write(ClientInitPackage(ip, port, client.token))
+        await self.tunnel.tun_write(ClientInitPackage(ip, port, client.token))
 
         # Serve data from the client
         while True:
@@ -247,10 +266,10 @@ class TunnelServer(Connection, Tunnel):
             if not data:
                 break
 
-            await self.tun_data(client.token, data)
+            await self.tunnel.tun_data(client.token, data)
 
         if self.server.is_serving():
-            await self.tun_write(ClientClosePackage(client.token))
+            await self.tunnel.tun_write(ClientClosePackage(client.token))
 
         await self._disconnect_client(client.token)
 
@@ -263,7 +282,7 @@ class TunnelServer(Connection, Tunnel):
         _logger.info("Tunnel %s listen on %s", self.uuid, out)
 
         addresses = [(TransportType.from_ip(ip), port) for ip, port in addresses]
-        await self.tun_write(InitPackage(self.token, addresses))
+        await self.tunnel.tun_write(InitPackage(self.token, addresses))
 
         # Start listening
         async with server:
@@ -274,11 +293,11 @@ class TunnelServer(Connection, Tunnel):
         await super()._serve()
 
         while True:
-            package = await self.tun_read()
+            package = await self.tunnel.tun_read()
             # Handle configuration
             if isinstance(package, ConfigPackage):
                 self.config_from_package(self, package)
-                await self._send_config(self)
+                await self._send_config(self.tunnel)
             # Handle a closed client
             elif isinstance(package, ClientClosePackage):
                 await self._disconnect_client(package.token)
@@ -299,11 +318,12 @@ class TunnelServer(Connection, Tunnel):
 
     # Close everything
     async def stop(self):
-        await Connection.close(self)
-        await Tunnel.close(self)
+        await super().stop()
 
-        self.server.close()
-        await self.server.wait_closed()
+        if self.server:
+            self.server.close()
+            await self.server.wait_closed()
+
         _logger.info("Tunnel %s closed", self.uuid)
 
     # Main loop of the proxy tunnel
@@ -316,7 +336,7 @@ class TunnelServer(Connection, Tunnel):
         port = get_unused_port(*self.ports) if self.ports else 0
         if port is None:
             _logger.error("All ports are blocked")
-            await self.close()
+            await self.stop()
             return
 
         self.server = await asyncio.start_server(self._client_accept, "", port)
@@ -325,4 +345,4 @@ class TunnelServer(Connection, Tunnel):
         try:
             await self._serve()
         finally:
-            await self.close()
+            await self.stop()

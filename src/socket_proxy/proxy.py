@@ -7,7 +7,7 @@ from .utils import generate_ssl_context
 _logger = logging.getLogger(__name__)
 
 
-# Main proxy server which creates a TLS secured socket and listens for clients.
+# Main proxy server which creates a TLS socket and listens for clients.
 # If clients connect the server will start a TunnelServer
 class ProxyServer:
     def __init__(
@@ -50,7 +50,7 @@ class ProxyServer:
 
     # Stop the server and event loop
     async def stop(self):
-        for tunnel in self.tunnels.values():
+        for tunnel in list(self.tunnels.values()):
             await tunnel.stop()
 
         self.server.close()
