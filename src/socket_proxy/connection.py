@@ -39,9 +39,12 @@ class Connection:
             await self.drain()
 
     async def close(self):
-        self.reader.feed_eof()
-        self.writer.close()
-        await self.writer.wait_closed()
+        try:
+            self.reader.feed_eof()
+            self.writer.close()
+            await self.writer.wait_closed()
+        except Exception:
+            pass
 
     async def tun_read(self):
         return await Package.from_reader(self)

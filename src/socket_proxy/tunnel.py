@@ -150,10 +150,16 @@ class TunnelClient(Tunnel):
                 await self._disconnect_client(client.token)
                 break
 
-            await self.tunnel.tun_data(client.token, data)
+            try:
+                await self.tunnel.tun_data(client.token, data)
+            except Exception:
+                break
 
         if self.running:
-            await self.tunnel.tun_write(ClientClosePackage(client.token))
+            try:
+                await self.tunnel.tun_write(ClientClosePackage(client.token))
+            except Exception:
+                pass
 
     async def _connect_client(self, package):
         if package.token in self:
