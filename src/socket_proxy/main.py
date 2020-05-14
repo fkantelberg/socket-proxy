@@ -142,7 +142,7 @@ def option_group(parser, server: bool):
     group.add_argument(
         "--idle-timeout",
         type=int,
-        default=None,
+        default=0,
         help="Timeout until the tunnel closes without interaction.",
     )
     if server:

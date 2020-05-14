@@ -17,7 +17,7 @@ setup(
     long_description=read("README.md"),
     long_description_content_type="text/markdown",
     license="MIT",
-    keywords="proxy socket",
+    keywords="proxy socket network",
     url="https://github.com/fkantelberg/socket-proxy",
     packages=find_packages("src"),
     package_dir={"": "src"},

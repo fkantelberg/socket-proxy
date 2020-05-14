@@ -105,19 +105,20 @@ class InitPackage(Package):
 class ConfigPackage(Package):
     _name = "client>config"
     _type = 0x11
-    __slots__ = ("bantime", "clients", "connects")
+    __slots__ = ("bantime", "clients", "connects", "idle_timeout")
 
-    CONFIG = PackageStruct("!III")
+    CONFIG = PackageStruct("!IIII")
 
-    def __init__(self, bantime, clients, connects, *args, **kwargs):
+    def __init__(self, bantime, clients, connects, idle_timeout, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.bantime = bantime
         self.clients = clients
         self.connects = connects
+        self.idle_timeout = idle_timeout
 
     def to_bytes(self):
         return super().to_bytes() + self.CONFIG.pack(
-            self.bantime, self.clients, self.connects,
+            self.bantime, self.clients, self.connects, self.idle_timeout,
         )
 
     @classmethod

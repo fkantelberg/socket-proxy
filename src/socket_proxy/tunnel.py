@@ -27,7 +27,7 @@ class Tunnel:
         chunk_size=1024,
         max_clients=0,
         max_connects=0,
-        idle_timeout=None,
+        idle_timeout=0,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -66,23 +66,27 @@ class Tunnel:
         return self.clients.get(token, None)
 
     def pop(self, token):
-        _logger.info("Client %s disconnected", token.hex())
         return self.clients.pop(token, None)
 
     def config_from_package(self, package):
         self.bantime = merge_settings(self.bantime, package.bantime)
         self.max_clients = merge_settings(self.max_clients, package.clients)
         self.max_connects = merge_settings(self.max_connects, package.connects)
+        self.idle_timeout = merge_settings(self.idle_timeout, package.idle_timeout)
 
-        _logger.debug("Tunnel %s ban time: %s", self.uuid, self.bantime)
-        _logger.debug("Tunnel %s clients: %s", self.uuid, self.max_clients)
+        _logger.debug("Tunnel %s ban time: %s", self.uuid, self.bantime or "off")
+        _logger.debug("Tunnel %s clients: %s", self.uuid, self.max_clients or "off")
         _logger.debug(
-            "Tunnel %s connections per IP: %s", self.uuid, self.max_connects,
+            "Tunnel %s idle timeout: %s", self.uuid, self.idle_timeout or "off"
+        )
+        _logger.debug(
+            "Tunnel %s connections per IP: %s", self.uuid, self.max_connects or "off",
         )
 
     async def _disconnect_client(self, token):
         client = self.pop(token)
         if client:
+            _logger.info("Client %s disconnected", token.hex())
             await client.close()
 
     async def idle(self):
@@ -102,7 +106,9 @@ class Tunnel:
         asyncio.create_task(self._interval())
 
     async def _send_config(self):
-        package = ConfigPackage(self.bantime, self.max_clients, self.max_connects)
+        package = ConfigPackage(
+            self.bantime, self.max_clients, self.max_connects, self.idle_timeout,
+        )
         await self.tunnel.tun_write(package)
 
     # Calls regularly the idle function
