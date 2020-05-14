@@ -194,7 +194,7 @@ def parse_args(args=None):
 def run_client(args):
     for arg in ["ca", "connect", "dst"]:
         if not getattr(args, arg):
-            _logger.critical("Missing -%s argument", arg)
+            _logger.critical("Missing --%s argument", arg)
             sys.exit(1)
 
     cli = TunnelClient(
@@ -215,7 +215,7 @@ def run_client(args):
 def run_server(args):
     for arg in ["cert", "key"]:
         if not getattr(args, arg):
-            _logger.critical("Missing -%s argument", arg)
+            _logger.critical("Missing --%s argument", arg)
             sys.exit(1)
 
     server = ProxyServer(
