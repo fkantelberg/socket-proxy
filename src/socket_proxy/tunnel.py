@@ -69,15 +69,15 @@ class Tunnel:
         _logger.info("Client %s disconnected", token.hex())
         return self.clients.pop(token, None)
 
-    def config_from_package(self, tunnel, package):
+    def config_from_package(self, package):
         self.bantime = merge_settings(self.bantime, package.bantime)
         self.max_clients = merge_settings(self.max_clients, package.clients)
         self.max_connects = merge_settings(self.max_connects, package.connects)
 
-        _logger.debug("Tunnel %s ban time: %s", tunnel.uuid, self.bantime)
-        _logger.debug("Tunnel %s clients: %s", tunnel.uuid, self.max_clients)
+        _logger.debug("Tunnel %s ban time: %s", self.uuid, self.bantime)
+        _logger.debug("Tunnel %s clients: %s", self.uuid, self.max_clients)
         _logger.debug(
-            "Tunnel %s connections per IP: %s", tunnel.uuid, self.max_connects,
+            "Tunnel %s connections per IP: %s", self.uuid, self.max_connects,
         )
 
     async def _disconnect_client(self, token):
@@ -88,6 +88,7 @@ class Tunnel:
     async def idle(self):
         if self.idle_timeout and self.tunnel:
             if time.time() - self.tunnel.last_time > self.idle_timeout:
+                _logger.info("Tunnel %s timeout", self.uuid)
                 await self.stop()
 
     async def stop(self):
@@ -100,9 +101,9 @@ class Tunnel:
     async def _serve(self):
         asyncio.create_task(self._interval())
 
-    async def _send_config(self, tunnel):
+    async def _send_config(self):
         package = ConfigPackage(self.bantime, self.max_clients, self.max_connects)
-        await tunnel.tun_write(package)
+        await self.tunnel.tun_write(package)
 
     # Calls regularly the idle function
     async def _interval(self):
@@ -183,9 +184,9 @@ class TunnelClient(Tunnel):
                 for ip_type, port in sorted(self.addresses):
                     _logger.info(fmt, self.tunnel.uuid, ip_type.name, port)
 
-                await self._send_config(self.tunnel)
+                await self._send_config()
             elif isinstance(package, ConfigPackage):
-                self.config_from_package(self.tunnel, package)
+                self.config_from_package(package)
             elif isinstance(package, ClientInitPackage):
                 await self._connect_client(package)
             elif isinstance(package, ClientClosePackage):
@@ -296,8 +297,8 @@ class TunnelServer(Tunnel):
             package = await self.tunnel.tun_read()
             # Handle configuration
             if isinstance(package, ConfigPackage):
-                self.config_from_package(self, package)
-                await self._send_config(self.tunnel)
+                self.config_from_package(package)
+                await self._send_config()
             # Handle a closed client
             elif isinstance(package, ClientClosePackage):
                 await self._disconnect_client(package.token)

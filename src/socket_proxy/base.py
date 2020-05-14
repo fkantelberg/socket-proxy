@@ -6,7 +6,7 @@ from datetime import datetime
 _logger = logging.getLogger(__name__)
 
 CLIENT_NAME_SIZE = 8
-INTERVAL_TIME = 15
+INTERVAL_TIME = 1
 DEFAULT_PORT = 2773
 DEFAULT_LOG_LEVEL = "debug"
 LOG_FORMAT = "{asctime} [{levelname:^8}] {message}"
