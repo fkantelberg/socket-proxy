@@ -1,8 +1,8 @@
 import asyncio
 import logging
 
+from . import utils
 from .tunnel import TunnelServer
-from .utils import generate_ssl_context
 
 _logger = logging.getLogger(__name__)
 
@@ -17,7 +17,7 @@ class ProxyServer:
         self.host, self.port = host, port
         self.max_tunnels = max_tunnels
         self.tunnels = {}
-        self.sc = generate_ssl_context(cert=cert, key=key, ca=ca, server=True)
+        self.sc = utils.generate_ssl_context(cert=cert, key=key, ca=ca, server=True)
 
     # Accept new tunnels and start to listen for clients
     async def _accept(self, reader, writer):

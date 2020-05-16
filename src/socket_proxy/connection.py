@@ -2,8 +2,7 @@ import asyncio
 import logging
 import time
 
-from .base import CLIENT_NAME_SIZE, InvalidPackage
-from .package import ClientDataPackage, Package
+from . import base, package
 
 _logger = logging.getLogger(__name__)
 
@@ -28,14 +27,14 @@ class Connection:
 
     # Write data packages on the tunnel and chunk them
     async def tun_data(self, token, data):
-        if len(token) != CLIENT_NAME_SIZE:
-            raise InvalidPackage()
+        if len(token) != base.CLIENT_NAME_SIZE:
+            raise package.InvalidPackage()
 
-        chunk_size = ClientDataPackage.MAX_SIZE
+        chunk_size = package.ClientDataPackage.MAX_SIZE
         for i in range(0, len(data), chunk_size):
             chunk = data[i:][:chunk_size]
-            package = ClientDataPackage(chunk, token)
-            self.write(package.to_bytes())
+            pkg = package.ClientDataPackage(chunk, token)
+            self.write(pkg.to_bytes())
             await self.drain()
 
     async def close(self):
@@ -47,10 +46,10 @@ class Connection:
             pass
 
     async def tun_read(self):
-        return await Package.from_reader(self)
+        return await package.Package.from_reader(self)
 
-    async def tun_write(self, package):
-        self.write(package.to_bytes())
+    async def tun_write(self, pkg):
+        self.write(pkg.to_bytes())
         await self.drain()
 
     async def readexactly(self, size):

@@ -9,13 +9,13 @@ import sys
 from random import shuffle
 from urllib.parse import urlsplit
 
-from .base import CLIENT_NAME_SIZE, LOG_FORMAT, LOG_LEVELS
+from . import base
 
 _logger = logging.getLogger(__name__)
 
 
 def configure_logging(log_file, level):
-    level = LOG_LEVELS.get(level.lower(), logging.DEBUG)
+    level = base.LOG_LEVELS.get(level.lower(), logging.DEBUG)
 
     log = logging.getLogger()
     log.setLevel(level)
@@ -24,13 +24,13 @@ def configure_logging(log_file, level):
     else:
         handler = logging.StreamHandler(sys.stdout)
     handler.setLevel(logging.DEBUG)
-    handler.setFormatter(logging.Formatter(LOG_FORMAT, style="{"))
+    handler.setFormatter(logging.Formatter(base.LOG_FORMAT, style="{"))
     log.addHandler(handler)
 
 
 # Generate a random token used for identification of clients and tunnels
 def generate_token():
-    return secrets.token_bytes(CLIENT_NAME_SIZE)
+    return secrets.token_bytes(base.CLIENT_NAME_SIZE)
 
 
 # Generate a SSL context for the tunnel

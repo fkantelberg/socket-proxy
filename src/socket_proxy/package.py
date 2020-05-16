@@ -2,13 +2,7 @@ import ipaddress
 import logging
 import struct
 
-from .base import (
-    CLIENT_NAME_SIZE,
-    DuplicatePackageType,
-    InvalidPackage,
-    InvalidPackageType,
-    TransportType,
-)
+from . import base
 
 _logger = logging.getLogger(__name__)
 _package_registry = {}
@@ -18,7 +12,7 @@ class MetaPackage(type):
     def __new__(metacls, name, bases, attrs):
         ptype = attrs["_type"]
         if ptype in _package_registry:
-            raise DuplicatePackageType()
+            raise base.DuplicatePackageType()
 
         cls = super().__new__(metacls, name, bases, attrs)
         if ptype is not None:
@@ -59,7 +53,7 @@ class Package(metaclass=MetaPackage):
             (ptype,) = await cls.HEADER.read(reader)
 
             if ptype not in _package_registry:
-                raise InvalidPackageType()
+                raise base.InvalidPackageType()
 
             pcls = _package_registry[ptype]
             return pcls(*await pcls.recv(reader))
@@ -74,7 +68,7 @@ class InitPackage(Package):
     _type = 0x10
     __slots__ = ("token", "addresses")
 
-    INIT = PackageStruct(f"!{CLIENT_NAME_SIZE}sB")
+    INIT = PackageStruct(f"!{base.CLIENT_NAME_SIZE}sB")
     ADDRESS = PackageStruct("!BH")
 
     def __init__(self, token, addresses, *args, **kwargs):
@@ -95,7 +89,7 @@ class InitPackage(Package):
         addresses = []
         for _ in range(length):
             ip_type, port = await cls.ADDRESS.read(reader)
-            addresses.append((TransportType(ip_type), port))
+            addresses.append((base.TransportType(ip_type), port))
 
         return (token, addresses) + res
 
@@ -134,7 +128,7 @@ class ClientPackage(Package):
     _type = 0x30
     __slots__ = ("token",)
 
-    TOKEN = PackageStruct(f"!{CLIENT_NAME_SIZE}s")
+    TOKEN = PackageStruct(f"!{base.CLIENT_NAME_SIZE}s")
 
     def __init__(self, token, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -163,19 +157,19 @@ class ClientInitPackage(ClientPackage):
         self.ip, self.port = ip, port
 
     def to_bytes(self):
-        ip_type = TransportType.from_ip(self.ip)
+        ip_type = base.TransportType.from_ip(self.ip)
         return super().to_bytes() + self.IP.pack(ip_type, self.port) + self.ip.packed
 
     @classmethod
     async def recv(cls, reader):
         res = await super().recv(reader)
         ip_type, port = await cls.IP.read(reader)
-        if ip_type == TransportType.IPv4:
+        if ip_type == base.TransportType.IPv4:
             ip = ipaddress.IPv4Address(await reader.readexactly(4))
-        elif ip_type == TransportType.IPv6:
+        elif ip_type == base.TransportType.IPv6:
             ip = ipaddress.IPv6Address(await reader.readexactly(16))
         else:
-            raise InvalidPackageType()
+            raise base.InvalidPackageType()
         return (ip, port) + res
 
 
@@ -214,7 +208,7 @@ class ClientDataPackage(ClientPackage):
         res = await super().recv(reader)
         (length,) = await cls.DATA.read(reader)
         if length > cls.MAX_SIZE:
-            raise InvalidPackage()
+            raise base.InvalidPackage()
 
         data = await reader.read(length)
         return (data,) + res

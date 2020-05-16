@@ -3,10 +3,9 @@ import argparse
 import logging
 import sys
 
-from .base import DEFAULT_LOG_LEVEL, DEFAULT_PORT, LOG_LEVELS
+from . import base, utils
 from .proxy import ProxyServer
 from .tunnel import TunnelClient
-from .utils import configure_logging, parse_address, valid_file, valid_ports
 
 _logger = logging.getLogger(__name__)
 
@@ -36,20 +35,20 @@ def security_group(parser, server: bool):
         text_key.append(a)
 
     group.add_argument(
-        "--ca", metavar="FILE", type=valid_file, help=" ".join(text_ca),
+        "--ca", metavar="FILE", type=utils.valid_file, help=" ".join(text_ca),
     )
 
     group.add_argument(
         "--cert",
         metavar="FILE",
-        type=valid_file,
+        type=utils.valid_file,
         required=server,
         help=" ".join(text_cert),
     )
     group.add_argument(
         "--key",
         metavar="FILE",
-        type=valid_file,
+        type=utils.valid_file,
         required=server,
         help=" ".join(text_key),
     )
@@ -74,11 +73,11 @@ def connection_group(parser, server: bool):
             "--listen",
             dest="listen",
             metavar="[host][:port]",
-            default=("", DEFAULT_PORT),
-            type=lambda x: parse_address(x, host="", port=DEFAULT_PORT),
+            default=("", base.DEFAULT_PORT),
+            type=lambda x: utils.parse_address(x, host="", port=base.DEFAULT_PORT),
             help=f"The address to listen on. If host is not given the server will "
             f"listen for connections from all IPs. If the port is not given "
-            f"the server will listen on port {DEFAULT_PORT}.",
+            f"the server will listen on port {base.DEFAULT_PORT}.",
         )
     else:
         group.add_argument(
@@ -86,16 +85,16 @@ def connection_group(parser, server: bool):
             "--connect",
             dest="connect",
             metavar="host[:port]",
-            type=lambda x: parse_address(x, port=DEFAULT_PORT),
+            type=lambda x: utils.parse_address(x, port=base.DEFAULT_PORT),
             help=f"The address to connect with host[:port]. Required for clients. "
-            f"The default port is {DEFAULT_PORT}.",
+            f"The default port is {base.DEFAULT_PORT}.",
         )
         group.add_argument(
             "-d",
             "--dst",
             dest="dst",
             metavar="[host]:port",
-            type=lambda x: parse_address(x, host="localhost"),
+            type=lambda x: utils.parse_address(x, host="localhost"),
             help="Target host and port for the connection. If the host is not "
             "given localhost will be used.",
         )
@@ -109,9 +108,9 @@ def logging_group(parser):
     )
     group.add_argument(
         "--log-level",
-        choices=sorted(LOG_LEVELS),
+        choices=sorted(base.LOG_LEVELS),
         default="DEBUG",
-        help=f"Set the log level to use. Default is {DEFAULT_LOG_LEVEL}.",
+        help=f"Set the log level to use. Default is {base.DEFAULT_LOG_LEVEL}.",
     )
 
 
@@ -154,7 +153,7 @@ def option_group(parser, server: bool):
         )
         group.add_argument(
             "--ports",
-            type=valid_ports,
+            type=utils.valid_ports,
             default=None,
             help="Range of ports to use for the sockets.",
         )
@@ -236,7 +235,7 @@ def run_server(args):
 def main(args=None):
     args = parse_args(args)
 
-    configure_logging(args.log_file, args.log_level)
+    utils.configure_logging(args.log_file, args.log_level)
 
     try:
         if args.mode == "server":
