@@ -61,6 +61,14 @@ class Package(metaclass=MetaPackage):
             return None
 
 
+# Package to configure/start the server site
+#  <SUPER>
+class ConnectPackage(Package):
+    _name = "connect"
+    _type = 0x01
+    __slots__ = ()
+
+
 # Package to initialize the tunnel which sends the external port
 #  <SUPER> <tunnel token> <number of ports> (<type of port> <external port>)*
 class InitPackage(Package):

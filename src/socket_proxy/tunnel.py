@@ -209,6 +209,8 @@ class TunnelClient(Tunnel):
 
         try:
             self.running = True
+            pkg = package.ConnectPackage()
+            await self.tunnel.tun_write(pkg)
             await self._serve()
         finally:
             self.running = False
@@ -228,6 +230,7 @@ class TunnelServer(Tunnel):
         self.tunnel = Connection(reader, writer, token=utils.generate_token())
         self.host, self.port = writer.get_extra_info("peername")[:2]
         self.ports = ports
+        self.server = None
         self.connections = collections.defaultdict(base.Ban)
 
     async def idle(self):
@@ -280,6 +283,19 @@ class TunnelServer(Tunnel):
 
         await self._disconnect_client(client.token)
 
+    # Open the listener
+    async def _open_server(self, pkg):
+        # Start to listen on an external port
+        port = utils.get_unused_port(*self.ports) if self.ports else 0
+        if port is None:
+            _logger.error("All ports are blocked")
+            await self.stop()
+            return False
+
+        self.server = await asyncio.start_server(self._client_accept, "", port)
+        asyncio.create_task(self._client_loop(self.server))
+        return True
+
     # Loop to listen for incoming clients
     async def _client_loop(self, server):
         addresses = [sock.getsockname()[:2] for sock in server.sockets]
@@ -302,8 +318,12 @@ class TunnelServer(Tunnel):
 
         while True:
             pkg = await self.tunnel.tun_read()
+            # Start the server
+            if isinstance(pkg, package.ConnectPackage):
+                if not await self._open_server(pkg):
+                    break
             # Handle configuration
-            if isinstance(pkg, package.ConfigPackage):
+            elif isinstance(pkg, package.ConfigPackage):
                 self.config_from_package(pkg)
                 await self._send_config()
             # Handle a closed client
@@ -339,16 +359,6 @@ class TunnelServer(Tunnel):
         _logger.info(
             "Tunnel %s connected %s:%s", self.uuid, self.host, self.port,
         )
-
-        # Start to listen on an external port
-        port = utils.get_unused_port(*self.ports) if self.ports else 0
-        if port is None:
-            _logger.error("All ports are blocked")
-            await self.stop()
-            return
-
-        self.server = await asyncio.start_server(self._client_accept, "", port)
-        asyncio.create_task(self._client_loop(self.server))
 
         try:
             await self._serve()

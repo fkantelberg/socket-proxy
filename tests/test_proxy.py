@@ -312,5 +312,6 @@ async def test_tunnel_server():
     # Test a blocked port with impossible range
     server.ports = (5000, 4000)
     server.server = None
-    await server.loop()
+    server.tunnel.tun_read.return_value = package.ConnectPackage()
+    await server._serve()
     assert server.server is None
