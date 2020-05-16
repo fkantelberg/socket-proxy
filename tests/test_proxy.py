@@ -96,6 +96,17 @@ async def test_connection_wrong_token():
 
 
 @pytest.mark.asyncio
+async def test_close_exception():
+    def raiseAssert(*args, **kwargs):
+        raise AssertionError()
+
+    conn = connection.Connection(None, None)
+    conn.reader = conn.writer = mock.MagicMock()
+    conn.writer.close = raiseAssert
+    await conn.close()
+
+
+@pytest.mark.asyncio
 async def test_tunnel_with_dummy(echo_server, server, client):
     async def connect_and_send(ip, port, text):
         reader, writer = await asyncio.open_connection(ip, port)
@@ -211,6 +222,9 @@ async def test_tunnel_timeout():
 
 @pytest.mark.asyncio
 async def test_tunnel_client():
+    async def raiseAssert(*args, **kwargs):
+        raise AssertionError()
+
     cli = mock.AsyncMock()
     cli.token = b"\x00" * base.CLIENT_NAME_SIZE
     cli.read.return_value = None
@@ -231,6 +245,13 @@ async def test_tunnel_client():
     cli.reader.feed_eof()
     await client._client_loop(cli)
     assert client.tunnel.tun_write.call_count
+
+    # Exception during writing and closing of client
+    client.running = True
+    cli.reader = asyncio.StreamReader()
+    cli.read.return_value = b"abc"
+    client.tunnel.tun_write = client.tunnel.tun_data = raiseAssert
+    await client._client_loop(cli)
 
     # Invalid package on the tunnel
     client.tunnel.tun_read = mock.AsyncMock()

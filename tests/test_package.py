@@ -5,7 +5,7 @@ from socket_proxy import base, package
 
 
 def test_meta_package():
-    with pytest.raises(package.DuplicatePackageType):
+    with pytest.raises(base.DuplicatePackageType):
 
         class DuplicatePackage(package.Package):
             _name = "duplicate"

@@ -28,7 +28,7 @@ class Connection:
     # Write data packages on the tunnel and chunk them
     async def tun_data(self, token, data):
         if len(token) != base.CLIENT_NAME_SIZE:
-            raise package.InvalidPackage()
+            raise base.InvalidPackage()
 
         chunk_size = package.ClientDataPackage.MAX_SIZE
         for i in range(0, len(data), chunk_size):
