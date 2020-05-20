@@ -63,6 +63,7 @@ async def server(event_loop):
     server = proxy.ProxyServer(
         host="", port=PORT, cert=SERVER_CERT, key=SERVER_KEY, ca=CA_CERT,
     )
+    tunnel.Tunnel._interval = mock.AsyncMock()
     event_loop.create_task(server.loop())
     await asyncio.sleep(0.1)
     yield server
@@ -81,6 +82,7 @@ async def client(event_loop):
         key=CLIENT_KEY,
         ca=CA_CERT,
     )
+    tunnel.Tunnel._interval = mock.AsyncMock()
     event_loop.create_task(client.loop())
     await asyncio.sleep(0.1)
     yield client
