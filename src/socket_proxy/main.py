@@ -87,7 +87,7 @@ def connection_group(parser, server: bool):
             metavar="host[:port]",
             type=lambda x: utils.parse_address(x, port=base.DEFAULT_PORT),
             help=f"The address to connect with host[:port]. Required for clients. "
-            f"The default port is {base.DEFAULT_PORT}.",
+            f"(default: {base.DEFAULT_PORT})",
         )
         group.add_argument(
             "-d",
@@ -109,18 +109,22 @@ def logging_group(parser):
     group.add_argument(
         "--log-level",
         choices=sorted(base.LOG_LEVELS),
-        default="DEBUG",
-        help=f"Set the log level to use. Default is {base.DEFAULT_LOG_LEVEL}.",
+        default=base.DEFAULT_LOG_LEVEL,
+        help="Set the log level to use. (default: %(default)s)",
     )
 
 
 def option_group(parser, server: bool):
-    group = parser.add_argument_group("Options")
+    group = parser.add_argument_group(
+        "Additional options",
+        "If the tunnel server and client set the options the minimal value will be used.",
+    )
     group.add_argument(
         "--ban-time",
         type=int,
         default=60,
-        help="Seconds until the number of connects by an IP resets.",
+        help="Seconds until the number of connects by an IP resets. "
+        "(default: %(default)s)",
     )
     group.add_argument(
         "--max-clients",
@@ -128,7 +132,7 @@ def option_group(parser, server: bool):
         default=0,
         help="Maximum number of clients able to use the tunnel. This option "
         "can be set on the server and client. For the server it's the "
-        "maximum number of clients per tunnel.",
+        "maximum number of clients per tunnel. (default: %(default)s)",
     )
     group.add_argument(
         "--max-connects",
@@ -136,23 +140,29 @@ def option_group(parser, server: bool):
         default=0,
         help="Maximum number of connects an IP is allowed to do within a "
         "certain time span. Disabled if 0. If set on both sites of the tunnel "
-        " the lower number is used.",
+        " the lower number is used. (default: %(default)s)",
     )
     group.add_argument(
         "--idle-timeout",
         type=int,
         default=0,
-        help="Timeout until the tunnel closes without interaction.",
+        help="Timeout until the tunnel closes without interaction. "
+        "(default: %(default)s)",
     )
     if server:
         group.add_argument(
             "--max-tunnels",
             type=int,
             default=0,
-            help="Maximum number of tunnels. Only useful in server mode.",
+            help="Maximum number of tunnels. Only useful in server mode. "
+            "(default: %(default)s)",
         )
         group.add_argument(
-            "--tunnel-host", default=None, help="Host IP used for the tunnels",
+            "--tunnel-host",
+            default=None,
+            help="The IP the tunnels listen on. Supports the usage of commas to "
+            "listen on different IPs. Each IP gets a different port. If not specified "
+            "the tunnels will listen on 2 ports for all IPv4 and IPv6 connections.",
         )
         group.add_argument(
             "--ports",
