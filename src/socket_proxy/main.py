@@ -152,6 +152,9 @@ def option_group(parser, server: bool):
             help="Maximum number of tunnels. Only useful in server mode.",
         )
         group.add_argument(
+            "--tunnel-host", default=None, help="Host IP used for the tunnels",
+        )
+        group.add_argument(
             "--ports",
             type=utils.valid_ports,
             default=None,
@@ -227,6 +230,7 @@ def run_server(args):
         max_connects=args.max_connects,
         max_tunnels=args.max_tunnels,
         idle_timeout=args.idle_timeout,
+        tunnel_host=args.tunnel_host,
         ports=args.ports,
     )
     server.start()

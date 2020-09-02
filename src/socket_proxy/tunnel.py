@@ -225,10 +225,11 @@ class TunnelClient(Tunnel):
 
 # Server side of the tunnel to listen for external connections
 class TunnelServer(Tunnel):
-    def __init__(self, reader, writer, *, ports=None, **kwargs):
+    def __init__(self, reader, writer, *, tunnel_host=None, ports=None, **kwargs):
         super().__init__(**kwargs)
         self.tunnel = Connection(reader, writer, token=utils.generate_token())
         self.host, self.port = writer.get_extra_info("peername")[:2]
+        self.tunnel_host = (tunnel_host or "").split(",")
         self.ports = ports
         self.server = None
         self.connections = collections.defaultdict(base.Ban)
@@ -292,7 +293,9 @@ class TunnelServer(Tunnel):
             await self.stop()
             return False
 
-        self.server = await asyncio.start_server(self._client_accept, "", port)
+        self.server = await asyncio.start_server(
+            self._client_accept, self.tunnel_host, port
+        )
         asyncio.create_task(self._client_loop(self.server))
         return True
 
