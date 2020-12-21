@@ -229,7 +229,7 @@ class TunnelServer(Tunnel):
         super().__init__(**kwargs)
         self.tunnel = Connection(reader, writer, token=utils.generate_token())
         self.host, self.port = writer.get_extra_info("peername")[:2]
-        self.tunnel_host = (tunnel_host or "").split(",")
+        self.tunnel_host = tunnel_host.split(",") if tunnel_host else ""
         self.ports = ports
         self.server = None
         self.connections = collections.defaultdict(base.Ban)
@@ -292,6 +292,8 @@ class TunnelServer(Tunnel):
             _logger.error("All ports are blocked")
             await self.stop()
             return False
+
+        _logger.error("%s: %s [%s]", self.tunnel_host, port, self.ports)
 
         self.server = await asyncio.start_server(
             self._client_accept, self.tunnel_host, port

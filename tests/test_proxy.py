@@ -122,6 +122,7 @@ async def test_tunnel_with_dummy(echo_server, server, client):
 
     # End to end test with an echo server
     await asyncio.sleep(0.1)
+    assert client.addresses
     for ip_type, port in client.addresses:
         if ip_type == base.TransportType.IPv4:
             assert await connect_and_send("127.0.0.1", port, b"abc") == b"abc"
