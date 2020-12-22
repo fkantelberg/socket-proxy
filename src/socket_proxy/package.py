@@ -9,6 +9,8 @@ _package_registry = {}
 
 
 class MetaPackage(type):
+    """ Meta class to register new packages using the type """
+
     def __new__(metacls, name, bases, attrs):
         ptype = attrs["_type"]
         if ptype in _package_registry:
@@ -20,35 +22,40 @@ class MetaPackage(type):
         return cls
 
 
-# Helper class to read exactly the size of the structure from the StreamReader
 class PackageStruct(struct.Struct):
+    """ Helper class to read exactly the size of the structure from the
+        StreamReader and unpacking it properly """
+
     async def read(self, reader):
         return self.unpack(await reader.readexactly(self.size))
 
 
-# Base package which defines the package type
-#  Building a package is done by the unique package type and class inheritance
-#  <package type>
 class Package(metaclass=MetaPackage):
+    """ Base package which defines the package type. Building a package is done
+        by the unique package type and class inheritance.
+
+        Structure: <package type>
+    """
+
     _name = None
     _type = None
     __slots__ = ()
 
     HEADER = PackageStruct("!B")
 
-    # Transform a package to bytes.
     def to_bytes(self):
+        """ Transform a package to bytes """
         return self.HEADER.pack(self._type)
 
-    # Read the package from the reader and return a tuple
-    # The tuple is is getting passed to the constructor
     @classmethod
     async def recv(cls, reader):  # pylint: disable=W0613
+        """ Read the package from the reader and return a tuple. The tuple is
+            getting passed to the constructor """
         return ()
 
-    # Read the package type and enforce the building of the package
     @classmethod
     async def from_reader(cls, reader):
+        """ Read the package type and enforce the building of the package """
         try:
             (ptype,) = await cls.HEADER.read(reader)
 
@@ -61,17 +68,39 @@ class Package(metaclass=MetaPackage):
             return None
 
 
-# Package to configure/start the server site
-#  <SUPER>
 class ConnectPackage(Package):
+    """ Package to configure/start the server site
+
+        Structure: <SUPER>
+    """
+
     _name = "connect"
     _type = 0x01
-    __slots__ = ()
+    __slots__ = ("protocol",)
+
+    PROTOCOL = PackageStruct("!B")
+
+    def __init__(self, protocol, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.protocol = protocol
+
+    def to_bytes(self):
+        return super().to_bytes() + self.PROTOCOL.pack(self.protocol.value)
+
+    @classmethod
+    async def recv(cls, reader):
+        res = await super().recv(reader)
+        (protocol,) = await cls.PROTOCOL.read(reader)
+        return (base.ProtocolType(protocol),) + res
 
 
-# Package to initialize the tunnel which sends the external port
-#  <SUPER> <tunnel token> <number of ports> (<type of port> <external port>)*
 class InitPackage(Package):
+    """ Package to initialize the tunnel which sends the external port. The number of
+        addresses is limitted to 255
+
+        Structure: <SUPER> <tunnel token> <number of ports> (<type of port> <external port>)*
+    """
+
     _name = "init"
     _type = 0x10
     __slots__ = ("token", "addresses")
@@ -86,8 +115,8 @@ class InitPackage(Package):
 
     def to_bytes(self):
         data = super().to_bytes() + self.INIT.pack(self.token, len(self.addresses))
-        for ip_type, port in self.addresses:
-            data += self.ADDRESS.pack(ip_type, port)
+        for address in self.addresses:
+            data += self.ADDRESS.pack(*address)
         return data
 
     @classmethod
@@ -97,14 +126,19 @@ class InitPackage(Package):
         addresses = []
         for _ in range(length):
             ip_type, port = await cls.ADDRESS.read(reader)
-            addresses.append((base.TransportType(ip_type), port))
+            addresses.append((base.InternetType(ip_type), port))
 
         return (token, addresses) + res
 
 
-# Package to inform about configurations
-#  <SUPER> <connects>
 class ConfigPackage(Package):
+    """ Package to inform about configurations. This package will be send between
+        both sides of the tunnel to negotiate the configuration by using the minimum
+        from each side or the maximum if one of the configuration is 0
+
+        Structure: <SUPER> <connects>
+    """
+
     _name = "client>config"
     _type = 0x11
     __slots__ = ("bantime", "clients", "connects", "idle_timeout")
@@ -129,9 +163,13 @@ class ConfigPackage(Package):
         return await cls.CONFIG.read(reader) + res
 
 
-# Base client package
-#  <SUPER> <client token>
 class ClientPackage(Package):
+    """ Basic client package which adds an unique token for the tunnel to determine
+        the specific clients
+
+        Structure: <SUPER> <client token>
+    """
+
     _name = "client"
     _type = 0x30
     __slots__ = ("token",)
@@ -151,9 +189,12 @@ class ClientPackage(Package):
         return await cls.TOKEN.read(reader) + res
 
 
-# Package to initialize a connecting client sending the client information
-#  <SUPER> <ip type> <client port> <client ip>
 class ClientInitPackage(ClientPackage):
+    """ Package to initialize a connecting client sending the client information
+
+        Structure: <SUPER> <ip type> <client port> <client ip>
+    """
+
     _name = "client>init"
     _type = 0x31
     __slots__ = ("ip", "port")
@@ -165,33 +206,40 @@ class ClientInitPackage(ClientPackage):
         self.ip, self.port = ip, port
 
     def to_bytes(self):
-        ip_type = base.TransportType.from_ip(self.ip)
+        ip_type = base.InternetType.from_ip(self.ip)
         return super().to_bytes() + self.IP.pack(ip_type, self.port) + self.ip.packed
 
     @classmethod
     async def recv(cls, reader):
         res = await super().recv(reader)
         ip_type, port = await cls.IP.read(reader)
-        if ip_type == base.TransportType.IPv4:
+        if ip_type == base.InternetType.IPv4:
             ip = ipaddress.IPv4Address(await reader.readexactly(4))
-        elif ip_type == base.TransportType.IPv6:
+        elif ip_type == base.InternetType.IPv6:
             ip = ipaddress.IPv6Address(await reader.readexactly(16))
         else:
             raise base.InvalidPackageType()
         return (ip, port) + res
 
 
-# Package to inform about disconnecting client
-#  <SUPER>
 class ClientClosePackage(ClientPackage):
+    """ Package to inform the other side about a disconnected client
+
+        Structure: <SUPER>
+    """
+
     _name = "client>close"
     _type = 0x32
     __slots__ = ()
 
 
-# Package to transmit data through the tunnel
-#  <SUPER> <data length> <data>
 class ClientDataPackage(ClientPackage):
+    """ Package to transmit data through the tunnel. This will produce quite some
+        overhead for many smaller packages
+
+        Structure: <SUPER> <data length> <data>
+    """
+
     _name = "client>data"
     _type = 0x33
     __slots__ = ("data",)

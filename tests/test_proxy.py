@@ -15,8 +15,8 @@ CLIENT_KEY = "pki/client.key"
 SERVER_CERT = "pki/server.pem"
 SERVER_KEY = "pki/server.key"
 
-PORT = pytest_asyncio.plugin._unused_tcp_port()
-PORT_DUMMY = pytest_asyncio.plugin._unused_tcp_port()
+TCP_PORT = pytest_asyncio.plugin._unused_tcp_port()
+TCP_PORT_DUMMY = pytest_asyncio.plugin._unused_tcp_port()
 
 proc = subprocess.Popen(["./certs.sh", "client"], stdin=subprocess.PIPE)
 proc.communicate()
@@ -51,7 +51,7 @@ async def echo_server(event_loop):
         async with server:
             await server.serve_forever()
 
-    server = await asyncio.start_server(accept, host="", port=PORT_DUMMY)
+    server = await asyncio.start_server(accept, host="", port=TCP_PORT_DUMMY)
     event_loop.create_task(loop(server))
     yield server
     server.close()
@@ -61,7 +61,7 @@ async def echo_server(event_loop):
 @pytest.fixture
 async def server(event_loop):
     server = proxy.ProxyServer(
-        host="", port=PORT, cert=SERVER_CERT, key=SERVER_KEY, ca=CA_CERT,
+        host="", port=TCP_PORT, cert=SERVER_CERT, key=SERVER_KEY, ca=CA_CERT,
     )
     tunnel.Tunnel._interval = mock.AsyncMock()
     event_loop.create_task(server.loop())
@@ -75,9 +75,9 @@ async def server(event_loop):
 async def client(event_loop):
     client = tunnel.TunnelClient(
         host="localhost",
-        port=PORT,
+        port=TCP_PORT,
         dst_host="localhost",
-        dst_port=PORT_DUMMY,
+        dst_port=TCP_PORT_DUMMY,
         cert=CLIENT_CERT,
         key=CLIENT_KEY,
         ca=CA_CERT,
@@ -124,9 +124,9 @@ async def test_tunnel_with_dummy(echo_server, server, client):
     await asyncio.sleep(0.1)
     assert client.addresses
     for ip_type, port in client.addresses:
-        if ip_type == base.TransportType.IPv4:
+        if ip_type == base.InternetType.IPv4:
             assert await connect_and_send("127.0.0.1", port, b"abc") == b"abc"
-        elif ip_type == base.TransportType.IPv6:
+        elif ip_type == base.InternetType.IPv6:
             assert await connect_and_send("::1", port, b"abc") == b"abc"
 
     # Close the echo server
@@ -136,9 +136,9 @@ async def test_tunnel_with_dummy(echo_server, server, client):
     await asyncio.sleep(0.1)
 
     for ip_type, port in client.addresses:
-        if ip_type == base.TransportType.IPv4:
+        if ip_type == base.InternetType.IPv4:
             assert await connect_and_send("127.0.0.1", port, b"abc") == b""
-        elif ip_type == base.TransportType.IPv6:
+        elif ip_type == base.InternetType.IPv6:
             assert await connect_and_send("::1", port, b"abc") == b""
 
     await server.stop()
@@ -158,12 +158,12 @@ async def test_proxy_tunnel_limit(server):
 
 
 def test_start_functions():
-    server = proxy.ProxyServer("", PORT, None, None, None)
+    server = proxy.ProxyServer("", TCP_PORT, None, None, None)
     server.loop = mock.AsyncMock()
     server.start()
     assert server.loop.call_count
 
-    client = tunnel.TunnelClient("", PORT, "", PORT_DUMMY, None)
+    client = tunnel.TunnelClient("", TCP_PORT, "", TCP_PORT_DUMMY, None)
     client.loop = mock.AsyncMock()
     client.start()
     assert client.loop.call_count
@@ -232,14 +232,14 @@ async def test_tunnel_client():
     cli.token = b"\x00" * base.CLIENT_NAME_SIZE
     cli.read.return_value = None
 
-    client = tunnel.TunnelClient("", PORT, "", PORT_DUMMY, None)
+    client = tunnel.TunnelClient("", TCP_PORT, "", TCP_PORT_DUMMY, None)
     client._disconnect_client = mock.AsyncMock()
     client.add(cli)
     client.tunnel = mock.AsyncMock()
     client.running = True
 
     # Try connect with existing client
-    pkg = package.ClientInitPackage("::1", PORT_DUMMY, cli.token)
+    pkg = package.ClientInitPackage("::1", TCP_PORT_DUMMY, cli.token)
     await client._connect_client(pkg)
     assert len(client.clients) == 1
 
@@ -272,7 +272,7 @@ async def test_tunnel_server():
     reader.feed_eof = mock.MagicMock()
     writer.close = mock.MagicMock()
     writer.get_extra_info = mock.MagicMock()
-    writer.get_extra_info.return_value = ("127.0.0.1", PORT)
+    writer.get_extra_info.return_value = ("127.0.0.1", TCP_PORT)
 
     server = tunnel.TunnelServer(reader, writer, max_connects=1)
 
@@ -315,6 +315,6 @@ async def test_tunnel_server():
     # Test a blocked port with impossible range
     server.ports = (5000, 4000)
     server.server = None
-    server.tunnel.tun_read.return_value = package.ConnectPackage()
+    server.tunnel.tun_read.return_value = package.ConnectPackage(base.ProtocolType.TCP)
     await server._serve()
     assert server.server is None

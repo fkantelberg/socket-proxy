@@ -7,11 +7,15 @@ from . import base, package
 _logger = logging.getLogger(__name__)
 
 
-# Wrapper class to handle StreamReader and StreamWriter
 class Connection:
-    def __init__(self, reader, writer, token=None, **kwargs):
+    """ Wrapper class to handle StreamReader and StreamWriter """
+
+    def __init__(
+        self, reader, writer, protocol=base.ProtocolType.TCP, token=None, **kwargs
+    ):
         super().__init__(**kwargs)
         self.reader, self.writer = reader, writer
+        self.protocol = protocol
         self.token = token or b""
         self.bytes_in = self.bytes_out = 0
         self.last_time = time.time()
@@ -25,8 +29,8 @@ class Connection:
         streams = await asyncio.open_connection(host, port, **kwargs)
         return cls(*streams, token=token)
 
-    # Write data packages on the tunnel and chunk them
     async def tun_data(self, token, data):
+        """ Write data packages on the tunnel and chunk them """
         if len(token) != base.CLIENT_NAME_SIZE:
             raise base.InvalidPackage()
 
@@ -47,11 +51,11 @@ class Connection:
 
     async def tun_read(self):
         pkg = await package.Package.from_reader(self)
-        _logger.debug("Package received: %s", pkg)
+        _logger.info("Package received: %s", pkg)
         return pkg
 
     async def tun_write(self, pkg):
-        _logger.debug("Package send: %s", pkg)
+        _logger.info("Package sent: %s", pkg)
         self.write(pkg.to_bytes())
         await self.drain()
 

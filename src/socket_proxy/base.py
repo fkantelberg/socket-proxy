@@ -22,22 +22,24 @@ LOG_LEVELS = {
 
 
 class InvalidPackage(Exception):
-    pass
+    """ Generic exception for package specific exceptions """
 
 
 class InvalidPackageType(InvalidPackage):
-    pass
+    """ The package type is unknown """
 
 
 class DuplicatePackageType(InvalidPackage):
-    pass
+    """ The package types aren't unique between all registered packages """
 
 
 class ReachedClientLimit(Exception):
-    pass
+    """ The tunnel reached the maximum number of simultanous clients connected """
 
 
-class TransportType(enum.IntEnum):
+class InternetType(enum.IntEnum):
+    """ Helper for IP addresses and identification """
+
     IPv4 = 0x01
     IPv6 = 0x02
 
@@ -47,13 +49,21 @@ class TransportType(enum.IntEnum):
             ip = ipaddress.ip_address(ip)
 
         if isinstance(ip, ipaddress.IPv4Address):
-            return TransportType.IPv4
+            return InternetType.IPv4
         if isinstance(ip, ipaddress.IPv6Address):
-            return TransportType.IPv6
+            return InternetType.IPv6
         raise ipaddress.AddressValueError()
 
 
+class ProtocolType(enum.IntEnum):
+    """ Helper class for supported protocols """
+
+    TCP = 0x01
+
+
 class Ban:
+    """ Helper class for bans """
+
     __slots__ = ("first", "hits")
 
     def __init__(self):

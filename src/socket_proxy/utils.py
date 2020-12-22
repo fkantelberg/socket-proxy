@@ -15,6 +15,7 @@ _logger = logging.getLogger(__name__)
 
 
 def configure_logging(log_file, level):
+    """ Configure the logging """
     level = base.LOG_LEVELS.get(level.lower(), logging.DEBUG)
 
     log = logging.getLogger()
@@ -28,15 +29,16 @@ def configure_logging(log_file, level):
     log.addHandler(handler)
 
 
-# Generate a random token used for identification of clients and tunnels
 def generate_token():
+    """ Generate a random token used for identification of clients and tunnels """
     return secrets.token_bytes(base.CLIENT_NAME_SIZE)
 
 
-# Generate a SSL context for the tunnel
 def generate_ssl_context(
     *, cert=None, key=None, ca=None, server=False, ciphers=None, check_hostname=False,
 ):
+    """ Generate a SSL context for the tunnel """
+
     # Set the protocol and create the basic context
     proto = ssl.PROTOCOL_TLS_SERVER if server else ssl.PROTOCOL_TLS_CLIENT
     ctx = ssl.SSLContext(proto)
@@ -73,9 +75,9 @@ def generate_ssl_context(
     return ctx
 
 
-# Returns a random unused port within the given range or None if all are used
-def get_unused_port(min_port, max_port):
-    sock = socket.socket()
+def get_unused_port(min_port, max_port, udp=False):
+    """ Returns a random unused port within the given range or None if all are used """
+    sock = socket.socket(type=socket.SOCK_DGRAM) if udp else socket.socket()
     ports = list(range(min_port, max_port + 1))
     shuffle(ports)
     for port in ports:
@@ -88,16 +90,15 @@ def get_unused_port(min_port, max_port):
     return None
 
 
-# Merge the settings of the tunnel
-#  if one of them is 0 the other one will take place
-#  otherwise the lower value will be used
 def merge_settings(a, b):
+    """ Merge the settings of the tunnel. If one of them is 0 the other one will
+        take place. otherwise the lower value will be used """
     return min(a, b) if a and b else max(a, b)
 
 
-# Parse an address and split hostname and port
-#   If host or port is None the values are required
 def parse_address(address, host=None, port=None):
+    """ Parse an address and split hostname and port. If host or port is None the
+        values are required """
     FORMAT_ERROR = "Invalid address parsed. Only host and port are supported."
 
     # Only the address without scheme and path
@@ -120,17 +121,17 @@ def parse_address(address, host=None, port=None):
     return h or host, p or port
 
 
-# Check if a file exists and return the absolute path otherwise raise an error
 def valid_file(path):
+    """ Check if a file exists and return the absolute path otherwise raise an
+        error. This function is used for the argument parsing"""
     path = os.path.abspath(path)
     if not os.path.isfile(path):
         raise argparse.ArgumentTypeError("Not a file.")
-
     return path
 
 
-# Check if the argument is a valid port range with IP family
 def valid_ports(ports):
+    """ Check if the argument is a valid port range with IP family """
     m = re.match(r"^(\d+):(\d+)?$", ports, re.IGNORECASE)
     if m:
         a, b = map(int, m.groups())

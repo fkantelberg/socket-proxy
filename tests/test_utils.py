@@ -7,7 +7,7 @@ from socket_proxy import base, utils
 
 
 def test_transport_type():
-    cls = base.TransportType
+    cls = base.InternetType
     assert cls.from_ip("127.0.0.1") == cls.IPv4
     assert cls.from_ip("::1") == cls.IPv6
 

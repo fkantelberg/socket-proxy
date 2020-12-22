@@ -7,9 +7,10 @@ from .tunnel import TunnelServer
 _logger = logging.getLogger(__name__)
 
 
-# Main proxy server which creates a TLS socket and listens for clients.
-# If clients connect the server will start a TunnelServer
 class ProxyServer:
+    """ Main proxy server which creates a TLS socket and listens for clients.
+        If clients connect the server will start a TunnelServer """
+
     def __init__(
         self, host, port, cert, key, ca=None, max_tunnels=0, **kwargs,
     ):
@@ -19,8 +20,9 @@ class ProxyServer:
         self.tunnels = {}
         self.sc = utils.generate_ssl_context(cert=cert, key=key, ca=ca, server=True)
 
-    # Accept new tunnels and start to listen for clients
     async def _accept(self, reader, writer):
+        """ Accept new tunnels and start to listen for clients """
+
         # Limit the number of tunnels
         if 0 < self.max_tunnels <= len(self.tunnels):
             return
@@ -33,8 +35,8 @@ class ProxyServer:
         finally:
             self.tunnels.pop(tunnel.token)
 
-    # Main server loop to wait for tunnels to open
     async def loop(self):
+        """ Main server loop to wait for tunnels to open """
         self.server = await asyncio.start_server(
             self._accept, self.host, self.port, ssl=self.sc,
         )
@@ -43,13 +45,13 @@ class ProxyServer:
         async with self.server:
             await self.server.serve_forever()
 
-    # Start the server and event loop
     def start(self):
+        """ Start the server and event loop """
         _logger.info("Starting server...")
         asyncio.run(self.loop())
 
-    # Stop the server and event loop
     async def stop(self):
+        """ Stop the server and event loop """
         for tunnel in list(self.tunnels.values()):
             await tunnel.stop()
 
