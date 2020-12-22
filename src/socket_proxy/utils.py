@@ -96,29 +96,58 @@ def merge_settings(a, b):
     return min(a, b) if a and b else max(a, b)
 
 
-def parse_address(address, host=None, port=None):
-    """ Parse an address and split hostname and port. If host or port is None the
-        values are required """
-    FORMAT_ERROR = "Invalid address parsed. Only host and port are supported."
+def parse_address(address, host=None, port=None, multiple=False):
+    """ Parse an address and split hostname and port. The port is required. The
+        default host is "" which means all """
 
-    # Only the address without scheme and path
-    if "/" in address:
-        raise argparse.ArgumentTypeError(FORMAT_ERROR)
+    # Only the address without scheme and path. We only support IPs if multiple hosts
+    # are activated
+    pattern = r"[0-9.:\[\],]*?" if multiple else r"[0-9a-zA-Z.:\[\],]*?"
+    match = re.match(fr"^(?P<hosts>{pattern})(:(?P<port>\d+))?$", address)
+    if not match:
+        raise argparse.ArgumentTypeError(
+            "Invalid address parsed. Only host and port are supported."
+        )
 
-    # Try parsing with fixed scheme
-    try:
-        parsed = urlsplit(f"http://{address}")
-        h, p = parsed.hostname, parsed.port
-    except Exception:
-        raise argparse.ArgumentTypeError(FORMAT_ERROR)
+    # Try to parse the port first
+    data = match.groupdict()
+    if data.get("port"):
+        port = int(data["port"])
+        if port <= 0 or port >= 65536:
+            raise argparse.ArgumentTypeError("Invalid address parsed. Invalid port.")
 
-    # If host or port are None these must be parsed
-    if not h and host is None:
-        raise argparse.ArgumentTypeError("Host required.")
-    if not p and port is None:
+    if port is None:
         raise argparse.ArgumentTypeError("Port required.")
 
-    return h or host, p or port
+    # Try parsing the different host addresses
+    hosts = set()
+    for h in data.get("hosts", "").split(","):
+        if not h:
+            hosts.add(h or host)
+            continue
+
+        try:
+            parsed = urlsplit(f"http://{h}")
+            hosts.add(parsed.hostname)
+        except Exception:
+            raise argparse.ArgumentTypeError("Invalid address parsed. Invalid host.")
+
+    # Multiple hosts are supported if the flag is set
+    if len(hosts) > 1 and multiple:
+        return sorted(hosts), port
+
+    # Otherwise we fail
+    if len(hosts) > 1:
+        raise argparse.ArgumentTypeError(
+            "Invalid address parsed. Only one host is required."
+        )
+
+    if len(hosts) == 1:
+        host = hosts.pop() or host
+        if host is not None:
+            return host, port
+
+    raise argparse.ArgumentTypeError("Invalid address parsed. Host required.")
 
 
 def valid_file(path):

@@ -19,7 +19,7 @@ class Tunnel:
         *,
         protocol=base.ProtocolType.TCP,
         bantime=60,
-        chunk_size=1024,
+        chunk_size=65536,
         max_clients=0,
         max_connects=0,
         idle_timeout=0,

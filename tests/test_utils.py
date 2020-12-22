@@ -50,13 +50,34 @@ def test_parse_address():
         utils.parse_address(":80")
 
     with pytest.raises(argparse.ArgumentTypeError):
+        utils.parse_address("[:80")
+
+    with pytest.raises(argparse.ArgumentTypeError):
+        utils.parse_address("example.org")
+
+    with pytest.raises(argparse.ArgumentTypeError):
+        utils.parse_address("example:org")
+
+    with pytest.raises(argparse.ArgumentTypeError):
         utils.parse_address("localhost:123456")
+
+    with pytest.raises(argparse.ArgumentTypeError):
+        utils.parse_address("127.0.0.1,[::1]:80")
+
+    with pytest.raises(argparse.ArgumentTypeError):
+        utils.parse_address("127.0.0.1,example.org:80")
 
     assert utils.parse_address("127.0.0.1:80") == ("127.0.0.1", 80)
     assert utils.parse_address("[::]:80") == ("::", 80)
     assert utils.parse_address(":80", host="::") == ("::", 80)
     assert utils.parse_address("[::]", port=80) == ("::", 80)
     assert utils.parse_address("", host="::", port=80) == ("::", 80)
+    assert utils.parse_address("example.org", port=80) == ("example.org", 80)
+    assert utils.parse_address("example.org:80") == ("example.org", 80)
+
+    hosts = ["127.0.0.1", "::1"]
+    addresses = f"127.0.0.1,[::1]:80"
+    assert utils.parse_address(addresses, multiple=True), (hosts, 80)
 
 
 def test_valid_file():

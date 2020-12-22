@@ -72,11 +72,14 @@ def connection_group(parser, server: bool):
             "-l",
             "--listen",
             dest="listen",
-            metavar="[host][:port]",
+            metavar="[host[,host]*][:port]",
             default=("", base.DEFAULT_PORT),
-            type=lambda x: utils.parse_address(x, host="", port=base.DEFAULT_PORT),
+            type=lambda x: utils.parse_address(
+                x, host="", port=base.DEFAULT_PORT, multiple=True,
+            ),
             help=f"The address to listen on. If host is not given the server will "
-            f"listen for connections from all IPs. If the port is not given "
+            f"listen for connections from all IPs. If you want to listen on multiple "
+            f"interfaces you can separate them by comma. If the port is not given "
             f"the server will listen on port {base.DEFAULT_PORT}.",
         )
     else:

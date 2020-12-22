@@ -41,7 +41,8 @@ class ProxyServer:
             self._accept, self.host, self.port, ssl=self.sc,
         )
 
-        _logger.info("Serving on %s:%s", self.host, self.port)
+        for host in self.host if isinstance(self.host, list) else [self.host]:
+            _logger.info("Serving on %s:%s", host, self.port)
         async with self.server:
             await self.server.serve_forever()
 
