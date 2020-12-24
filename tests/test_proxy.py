@@ -99,6 +99,22 @@ async def test_connection_wrong_token():
 
 
 @pytest.mark.asyncio
+async def test_tunnel_idle():
+    async def idle(*args, **kwargs):
+        if not hasattr(idle, "counter"):
+            idle.counter = True
+        else:
+            raise AssertionError()
+
+    tun = tunnel.Tunnel()
+    tun.idle = idle
+    base.INTERVAL_TIME = 0.01
+
+    with pytest.raises(AssertionError):
+        await tun._interval()
+
+
+@pytest.mark.asyncio
 async def test_close_exception():
     def raiseAssert(*args, **kwargs):
         raise AssertionError()
