@@ -1,4 +1,5 @@
 import asyncio
+import ipaddress
 import ssl
 import subprocess
 import time
@@ -281,10 +282,22 @@ async def test_tunnel_server():
     assert len(server.connections) == 0
     with pytest.raises(AssertionError):
         await server._client_accept(reader, writer)
-    assert len(server.connections) == 1
 
+    assert len(server.connections) == 1
     # Try again should cause a ban
     await server._client_accept(reader, writer)
+
+    # Test connection from different ips
+    server.max_connects = 100
+    server.networks = [ipaddress.ip_network("127.0.1.0/24")]
+    await server._client_accept(reader, writer)
+
+    server.networks = [ipaddress.ip_network("127.0.0.0/24")]
+    with pytest.raises(AssertionError):
+        await server._client_accept(reader, writer)
+
+    server.networks = []
+
     assert reader.feed_eof.call_count
     assert writer.close.call_count and writer.wait_closed.called
 

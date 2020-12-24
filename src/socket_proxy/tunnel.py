@@ -302,6 +302,7 @@ class TunnelServer(Tunnel):
         ip = ipaddress.ip_address(host)
 
         # Block connections using the networks
+        print(self.block(ip), ip, self.networks)
         if self.block(ip):
             reader.feed_eof()
             writer.close()
