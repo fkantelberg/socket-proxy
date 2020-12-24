@@ -152,6 +152,13 @@ def option_group(parser, server: bool):
         help="Timeout until the tunnel closes without interaction. "
         "(default: %(default)s)",
     )
+    group.add_argument(
+        "--networks",
+        type=utils.parse_networks,
+        default=[],
+        help="Define comma separated networks in CIDR to allow only specific "
+        "clients to connect to the server. (default: any)",
+    )
     if server:
         group.add_argument(
             "--max-tunnels",
@@ -223,6 +230,7 @@ def run_client(args):
         max_connects=args.max_connects,
         idle_timeout=args.idle_timeout,
         verify_hostname=not args.no_verify_hostname,
+        networks=args.networks,
     )
     cli.start()
 
@@ -245,6 +253,7 @@ def run_server(args):
         idle_timeout=args.idle_timeout,
         tunnel_host=args.tunnel_host,
         ports=args.ports,
+        networks=args.networks,
     )
     server.start()
 

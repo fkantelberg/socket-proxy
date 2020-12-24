@@ -1,4 +1,5 @@
 import asyncio
+import ipaddress
 
 import pytest
 from socket_proxy import base, package
@@ -19,6 +20,27 @@ def test_meta_package():
 
     assert issubclass(TestPackage, package.Package)
     assert package._package_registry[1024] == TestPackage
+
+
+@pytest.mark.asyncio
+async def test_network_packing():
+    net4, net6 = map(ipaddress.ip_network, ("127.0.0.0/8", "ff::/32"))
+    packed4, packed6 = map(package.PackageStruct.pack_network, (net4, net6))
+
+    assert packed4 == b"\x01\x08\x7f\x00\x00\x00"
+    assert packed6 == b"\x02\x20\x00\xff" + b"\x00" * 14
+
+    reader = asyncio.StreamReader()
+    reader.feed_data(packed4)
+    reader.feed_data(packed6)
+    reader.feed_data(b"\x00\x00")
+    reader.feed_eof()
+
+    assert await package.PackageStruct.read_network(reader) == net4
+    assert await package.PackageStruct.read_network(reader) == net6
+
+    with pytest.raises(base.InvalidPackage):
+        await package.PackageStruct.read_network(reader)
 
 
 @pytest.mark.asyncio

@@ -1,4 +1,6 @@
 import argparse
+import ipaddress
+import itertools
 import logging
 import os
 import re
@@ -64,13 +66,13 @@ def generate_ssl_context(
         ctx.set_ciphers(ciphers)
 
     # Output debugging
-    _logger.debug("CA usage: %s", bool(ca))
-    _logger.debug("Certificate: %s", bool(cert))
-    _logger.debug("Hostname verification: %s", bool(check_hostname))
-    _logger.debug("Minimal TLS Versions: %s", ctx.minimum_version.name)
+    _logger.info("CA usage: %s", bool(ca))
+    _logger.info("Certificate: %s", bool(cert))
+    _logger.info("Hostname verification: %s", bool(check_hostname))
+    _logger.info("Minimal TLS Versions: %s", ctx.minimum_version.name)
 
     ciphers = sorted(c["name"] for c in ctx.get_ciphers())
-    _logger.debug("Ciphers: %s", ", ".join(ciphers))
+    _logger.info("Ciphers: %s", ", ".join(ciphers))
 
     return ctx
 
@@ -94,6 +96,29 @@ def merge_settings(a, b):
     """ Merge the settings of the tunnel. If one of them is 0 the other one will
         take place. otherwise the lower value will be used """
     return min(a, b) if a and b else max(a, b)
+
+
+def optimize_networks(*networks):
+    """ Try to optimize the list of networks by using the minimal network
+        configuration """
+
+    grouped = itertools.groupby(networks, lambda n: n.version)
+    groups = {}
+    for version, group in grouped:
+        group = sorted(set(group))
+        tmp = set()
+        for i, a in enumerate(group):
+            for b in group[i + 1 :]:
+                if b.subnet_of(a):
+                    tmp.add(b)
+                    break
+            else:
+                tmp.add(a)
+        groups[version] = sorted(tmp)
+
+    result = sum([g for _, g in sorted(groups.items())], [])
+    _logger.info(result)
+    return result
 
 
 def parse_address(address, host=None, port=None, multiple=False):
@@ -148,6 +173,14 @@ def parse_address(address, host=None, port=None, multiple=False):
             return host, port
 
     raise argparse.ArgumentTypeError("Invalid address parsed. Host required.")
+
+
+def parse_networks(network):
+    """ Try to parse multiple networks and return them optimized """
+    try:
+        return optimize_networks(*map(ipaddress.ip_network, network.split(",")))
+    except Exception:
+        raise argparse.ArgumentTypeError("Invalid network format")
 
 
 def valid_file(path):

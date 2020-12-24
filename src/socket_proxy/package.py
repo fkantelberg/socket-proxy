@@ -26,8 +26,25 @@ class PackageStruct(struct.Struct):
     """ Helper class to read exactly the size of the structure from the
         StreamReader and unpacking it properly """
 
+    @classmethod
+    def pack_network(cls, network):
+        ip = network.network_address
+        ip_type = base.InternetType.from_ip(ip)
+        return struct.pack("!BB", ip_type, network.prefixlen) + ip.packed
+
     async def read(self, reader):
         return self.unpack(await reader.readexactly(self.size))
+
+    @classmethod
+    async def read_network(cls, reader):
+        ip_type, prefixlen = await cls("!BB").read(reader)
+        if ip_type == base.InternetType.IPv4:
+            ip = ipaddress.IPv4Address(await reader.readexactly(4))
+        elif ip_type == base.InternetType.IPv6:
+            ip = ipaddress.IPv6Address(await reader.readexactly(16))
+        else:
+            raise base.InvalidPackage()
+        return ipaddress.ip_network(f"{ip}/{prefixlen}")
 
 
 class Package(metaclass=MetaPackage):
@@ -141,26 +158,37 @@ class ConfigPackage(Package):
 
     _name = "client>config"
     _type = 0x11
-    __slots__ = ("bantime", "clients", "connects", "idle_timeout")
+    __slots__ = ("bantime", "clients", "connects", "idle_timeout", "networks")
 
-    CONFIG = PackageStruct("!IIII")
+    CONFIG = PackageStruct("!IIIII")
 
-    def __init__(self, bantime, clients, connects, idle_timeout, *args, **kwargs):
+    def __init__(
+        self, bantime, clients, connects, idle_timeout, networks, *args, **kwargs
+    ):
         super().__init__(*args, **kwargs)
         self.bantime = bantime
         self.clients = clients
         self.connects = connects
         self.idle_timeout = idle_timeout
+        self.networks = networks
 
     def to_bytes(self):
-        return super().to_bytes() + self.CONFIG.pack(
-            self.bantime, self.clients, self.connects, self.idle_timeout,
+        config = self.CONFIG.pack(
+            self.bantime,
+            self.clients,
+            self.connects,
+            self.idle_timeout,
+            len(self.networks),
         )
+        networks = b"".join(map(PackageStruct.pack_network, self.networks))
+        return super().to_bytes() + config + networks
 
     @classmethod
     async def recv(cls, reader):
         res = await super().recv(reader)
-        return await cls.CONFIG.read(reader) + res
+        config = list(await cls.CONFIG.read(reader))
+        config[-1] = [PackageStruct.read_network(reader) for _ in range(config[-1])]
+        return tuple(config) + res
 
 
 class ClientPackage(Package):

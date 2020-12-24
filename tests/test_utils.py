@@ -39,6 +39,25 @@ def test_merge_settings():
     assert utils.merge_settings(4, 9) == 4
 
 
+def test_optimize_networks():
+    def n(network):
+        return ipaddress.ip_network(network)
+
+    a, b, c = map(n, ("127.0.0.0/16", "127.0.0.0/24", "127.0.1.0/24"))
+    d, e, f = map(n, ("ff::/32", "fd::/64", "ff::/64"))
+    # The result should be unique
+    assert utils.optimize_networks(a, a, d, d) == [a, d]
+
+    # The order shouldn't matter
+    assert utils.optimize_networks(a, b) == [b]
+    assert utils.optimize_networks(b, a) == [b]
+    assert utils.optimize_networks(b, c) == [b, c]
+    assert utils.optimize_networks(c, b) == [b, c]
+
+    # Try a full example
+    assert utils.optimize_networks(a, b, c, d, e, f) == [b, c, e, f]
+
+
 def test_parse_address():
     with pytest.raises(argparse.ArgumentTypeError):
         utils.parse_address("127.0.0.1:80/test")
@@ -78,6 +97,18 @@ def test_parse_address():
     hosts = ["127.0.0.1", "::1"]
     addresses = f"127.0.0.1,[::1]:80"
     assert utils.parse_address(addresses, multiple=True), (hosts, 80)
+
+
+def test_parse_network():
+    a, b = "0.0.0.0/0", "::/0"
+
+    with pytest.raises(argparse.ArgumentTypeError):
+        utils.parse_networks(".")
+
+    with pytest.raises(argparse.ArgumentTypeError):
+        utils.parse_networks(f"{a}{b}")
+
+    assert len(utils.parse_networks(f"{a},{b}")) == 2
 
 
 def test_valid_file():

@@ -23,6 +23,7 @@ class Tunnel:
         max_clients=0,
         max_connects=0,
         idle_timeout=0,
+        networks=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -34,6 +35,7 @@ class Tunnel:
         self.max_clients = max_clients
         self.max_connects = max_connects
         self.idle_timeout = idle_timeout
+        self.networks = networks or []
 
     def __contains__(self, token):
         return token in self.clients
@@ -70,14 +72,17 @@ class Tunnel:
         self.max_clients = utils.merge_settings(self.max_clients, pkg.clients)
         self.max_connects = utils.merge_settings(self.max_connects, pkg.connects)
         self.idle_timeout = utils.merge_settings(self.idle_timeout, pkg.idle_timeout)
+        self.networks = utils.optimize_networks(*self.networks, *pkg.networks)
 
-        # Just output the current configuration for debugging
-        _logger.debug("Tunnel %s ban time: %s", self.uuid, self.bantime or "off")
-        _logger.debug("Tunnel %s clients: %s", self.uuid, self.max_clients or "off")
-        _logger.debug(
-            "Tunnel %s idle timeout: %s", self.uuid, self.idle_timeout or "off"
+        # Just output the current configuration
+        networks = self.networks if self.networks else ["0.0.0.0/0", "::/0"]
+        _logger.info("Allowed networks: %s", ", ".join(map(str, networks)))
+        _logger.info("Tunnel %s ban time: %s", self.uuid, self.bantime or "off")
+        _logger.info("Tunnel %s clients: %s", self.uuid, self.max_clients or "off")
+        _logger.info(
+            "Tunnel %s idle timeout: %s", self.uuid, self.idle_timeout or "off",
         )
-        _logger.debug(
+        _logger.info(
             "Tunnel %s connections per IP: %s", self.uuid, self.max_connects or "off",
         )
 
@@ -110,7 +115,11 @@ class Tunnel:
     async def _send_config(self):
         """ Send the current configuration as a package through the tunnel """
         pkg = package.ConfigPackage(
-            self.bantime, self.max_clients, self.max_connects, self.idle_timeout,
+            self.bantime,
+            self.max_clients,
+            self.max_connects,
+            self.idle_timeout,
+            self.networks,
         )
         await self.tunnel.tun_write(pkg)
 
@@ -267,6 +276,16 @@ class TunnelServer(Tunnel):
         self.server = None
         self.connections = collections.defaultdict(base.Ban)
 
+    def block(self, ip):
+        """ Decide whether the ip should be blocked """
+        if 0 < self.max_connects <= self.connections[ip].hits:
+            return True
+
+        if self.networks and not any(ip in n for n in self.networks):
+            return True
+
+        return False
+
     async def idle(self):
         await super().idle()
 
@@ -282,8 +301,8 @@ class TunnelServer(Tunnel):
         host, port = writer.get_extra_info("peername")[:2]
         ip = ipaddress.ip_address(host)
 
-        # If the IP exceeds the maximum number of connections
-        if 0 < self.max_connects <= self.connections[ip].hits:
+        # Block connections using the networks
+        if self.block(ip):
             reader.feed_eof()
             writer.close()
             await writer.wait_closed()
