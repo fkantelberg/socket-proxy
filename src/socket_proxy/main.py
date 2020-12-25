@@ -4,6 +4,7 @@ import logging
 import sys
 
 from . import base, utils
+from .config import OptionType, config
 from .proxy import ProxyServer
 from .tunnel import TunnelClient
 
@@ -18,6 +19,13 @@ class CustomHelpFormatter(argparse.HelpFormatter):
         default = self._get_default_metavar_for_optional(action)
         args_string = self._format_args(action, default)
         return f"{'/'.join(action.option_strings)} {args_string}"
+
+
+def basic_group(parser):
+    group = parser.add_argument_group("Security")
+    group.add_argument(
+        "--config", help="Load everything from a configuration file",
+    )
 
 
 def security_group(parser, server: bool):
@@ -35,20 +43,20 @@ def security_group(parser, server: bool):
         text_key.append(a)
 
     group.add_argument(
-        "--ca", metavar="FILE", type=utils.valid_file, help=" ".join(text_ca),
+        "--ca", metavar="FILE", type=OptionType["ca"], help=" ".join(text_ca),
     )
 
     group.add_argument(
         "--cert",
         metavar="FILE",
-        type=utils.valid_file,
+        type=OptionType["cert"],
         required=server,
         help=" ".join(text_cert),
     )
     group.add_argument(
         "--key",
         metavar="FILE",
-        type=utils.valid_file,
+        type=OptionType["key"],
         required=server,
         help=" ".join(text_key),
     )
@@ -74,9 +82,7 @@ def connection_group(parser, server: bool):
             dest="listen",
             metavar="[host[,host]*][:port]",
             default=("", base.DEFAULT_PORT),
-            type=lambda x: utils.parse_address(
-                x, host="", port=base.DEFAULT_PORT, multiple=True,
-            ),
+            type=OptionType["listen"],
             help=f"The address to listen on. If host is not given the server will "
             f"listen for connections from all IPs. If you want to listen on multiple "
             f"interfaces you can separate them by comma. If the port is not given "
@@ -88,7 +94,7 @@ def connection_group(parser, server: bool):
             "--connect",
             dest="connect",
             metavar="host[:port]",
-            type=lambda x: utils.parse_address(x, port=base.DEFAULT_PORT),
+            type=OptionType["connect"],
             help=f"The address to connect with host[:port]. Required for clients. "
             f"(default: {base.DEFAULT_PORT})",
         )
@@ -97,7 +103,7 @@ def connection_group(parser, server: bool):
             "--dst",
             dest="dst",
             metavar="[host]:port",
-            type=lambda x: utils.parse_address(x, host="localhost"),
+            type=OptionType["dst"],
             help="Target host and port for the connection. If the host is not "
             "given localhost will be used.",
         )
@@ -124,14 +130,14 @@ def option_group(parser, server: bool):
     )
     group.add_argument(
         "--ban-time",
-        type=int,
+        type=OptionType["ban-time"],
         default=60,
         help="Seconds until the number of connects by an IP resets. "
         "(default: %(default)s)",
     )
     group.add_argument(
         "--max-clients",
-        type=int,
+        type=OptionType["max-clients"],
         default=0,
         help="Maximum number of clients able to use the tunnel. This option "
         "can be set on the server and client. For the server it's the "
@@ -139,7 +145,7 @@ def option_group(parser, server: bool):
     )
     group.add_argument(
         "--max-connects",
-        type=int,
+        type=OptionType["max-connects"],
         default=0,
         help="Maximum number of connects an IP is allowed to do within a "
         "certain time span. Disabled if 0. If set on both sites of the tunnel "
@@ -147,14 +153,14 @@ def option_group(parser, server: bool):
     )
     group.add_argument(
         "--idle-timeout",
-        type=int,
+        type=OptionType["idle-timeout"],
         default=0,
         help="Timeout until the tunnel closes without interaction. "
         "(default: %(default)s)",
     )
     group.add_argument(
         "--networks",
-        type=utils.parse_networks,
+        type=OptionType["networks"],
         default=[],
         help="Define comma separated networks in CIDR to allow only specific "
         "clients to connect to the server. (default: any)",
@@ -162,7 +168,7 @@ def option_group(parser, server: bool):
     if server:
         group.add_argument(
             "--max-tunnels",
-            type=int,
+            type=OptionType["max-tunnels"],
             default=0,
             help="Maximum number of tunnels. Only useful in server mode. "
             "(default: %(default)s)",
@@ -176,7 +182,7 @@ def option_group(parser, server: bool):
         )
         group.add_argument(
             "--ports",
-            type=utils.valid_ports,
+            type=OptionType["ports"],
             default=None,
             help="Range of ports to use for the sockets.",
         )
@@ -184,7 +190,7 @@ def option_group(parser, server: bool):
 
 def parse_args(args=None):
     parser = argparse.ArgumentParser(
-        formatter_class=CustomHelpFormatter, prog="", description=""
+        formatter_class=CustomHelpFormatter, prog="", description="",
     )
     logging_group(parser)
 
@@ -195,6 +201,7 @@ def parse_args(args=None):
         formatter_class=CustomHelpFormatter,
         help="Enter client mode connect to a server building the tunnel.",
     )
+    basic_group(client)
     security_group(client, False)
     connection_group(client, False)
     option_group(client, False)
@@ -205,6 +212,7 @@ def parse_args(args=None):
         formatter_class=CustomHelpFormatter,
         help="Enter server mode and listen for incoming clients to build the tunnels.",
     )
+    basic_group(server)
     security_group(server, True)
     connection_group(server, True)
     option_group(server, True)
@@ -213,47 +221,47 @@ def parse_args(args=None):
     return parser.parse_args(args)
 
 
-def run_client(args):
+def run_client():
     for arg in ["ca", "connect", "dst"]:
-        if not getattr(args, arg):
+        if not config.get(arg, False):
             _logger.critical("Missing --%s argument", arg)
             sys.exit(1)
 
     cli = TunnelClient(
-        *args.connect,
-        *args.dst,
-        ca=args.ca,
-        cert=args.cert,
-        key=args.key,
-        bantime=args.ban_time,
-        max_clients=args.max_clients,
-        max_connects=args.max_connects,
-        idle_timeout=args.idle_timeout,
-        verify_hostname=not args.no_verify_hostname,
-        networks=args.networks,
+        *config["connect"],
+        *config["args.dst"],
+        ca=config["ca"],
+        cert=config["cert"],
+        key=config["key"],
+        bantime=config["ban-time"],
+        max_clients=config["max-clients"],
+        max_connects=config["max-connects"],
+        idle_timeout=config["idle-timeout"],
+        verify_hostname=not config["no-verify-hostname"],
+        networks=config["networks"],
     )
     cli.start()
 
 
-def run_server(args):
+def run_server():
     for arg in ["cert", "key"]:
-        if not getattr(args, arg):
+        if not config.get(arg, False):
             _logger.critical("Missing --%s argument", arg)
             sys.exit(1)
 
     server = ProxyServer(
-        *args.listen,
-        ca=args.ca,
-        cert=args.cert,
-        key=args.key,
-        bantime=args.ban_time,
-        max_clients=args.max_clients,
-        max_connects=args.max_connects,
-        max_tunnels=args.max_tunnels,
-        idle_timeout=args.idle_timeout,
-        tunnel_host=args.tunnel_host,
-        ports=args.ports,
-        networks=args.networks,
+        *config["listen"],
+        ca=config["ca"],
+        cert=config["cert"],
+        key=config["key"],
+        bantime=config["ban-time"],
+        max_clients=config["max-clients"],
+        max_connects=config["max-connects"],
+        max_tunnels=config["max-tunnels"],
+        idle_timeout=config["idle-timeout"],
+        tunnel_host=config["tunnel-host"],
+        ports=config["ports"],
+        networks=config["networks"],
     )
     server.start()
 
@@ -261,13 +269,20 @@ def run_server(args):
 def main(args=None):
     args = parse_args(args)
 
+    if args.config:
+        config.load(args.mode, args.config)
+
+        sys.exit()
+
+    config.load_arguments(args)
+
     utils.configure_logging(args.log_file, args.log_level)
 
     try:
         if args.mode == "server":
-            run_server(args)
+            run_server()
         elif args.mode == "client":
-            run_client(args)
+            run_client()
     except KeyboardInterrupt:
         _logger.info("Shutting down")
 

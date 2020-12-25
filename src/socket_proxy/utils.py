@@ -196,7 +196,7 @@ def valid_ports(ports):
     """ Check if the argument is a valid port range with IP family """
     m = re.match(r"^(\d+):(\d+)?$", ports, re.IGNORECASE)
     if m:
-        a, b = map(int, m.groups())
+        a, b = sorted(map(int, m.groups()))
         if 0 < a < b < 65536:
             return a, b
         raise argparse.ArgumentTypeError("Port must be in range (1, 65536)")

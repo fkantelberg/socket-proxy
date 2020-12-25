@@ -1,9 +1,12 @@
 import argparse
 import ipaddress
 import socket
+from tempfile import NamedTemporaryFile
+from unittest import mock
 
 import pytest
 from socket_proxy import base, utils
+from socket_proxy.config import OptionDefault, config, to_bool
 
 
 def test_transport_type():
@@ -18,6 +21,38 @@ def test_transport_type():
 def test_ban():
     ban = base.Ban()
     assert ban.hits == 0
+
+
+def test_to_bool():
+    assert to_bool("1") is True
+    assert to_bool("on") is True
+    assert to_bool("t") is True
+    assert to_bool("true") is True
+    assert to_bool("True") is True
+    assert to_bool("TRUE") is True
+    assert to_bool("False") is False
+
+
+def test_config():
+    with NamedTemporaryFile() as fp:
+        fp.write(b"[server]\nban-time=15\nports=7000:9000\n[client]\nban-time=20\n")
+        fp.seek(0, 0)
+
+        assert not config.load("missing", fp.name)
+
+        assert "ban-time" in config
+        assert config.get("missing") is None
+        assert config["ban-time"] == OptionDefault["ban-time"]
+        assert config.load("server", fp.name)
+        assert config["ban-time"] == 15
+        assert config["ports"] == (7000, 9000)
+        config.load("client", fp.name)
+        assert config["ban-time"] == 20
+
+        args = mock.Mock()
+        args.ban_time = 45
+        config.load_arguments(args)
+        assert config["ban-time"] == 45
 
 
 def test_configure_logging():
@@ -132,7 +167,7 @@ def test_unused_port():
 
 
 def test_valid_ports():
-    for fail in [":", "0", "0:6000", "5000:90000", "6000:5000"]:
+    for fail in [":", "0", "0:6000", "5000:90000"]:
         with pytest.raises(argparse.ArgumentTypeError):
             utils.valid_ports(fail)
 
