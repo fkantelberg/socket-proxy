@@ -6,6 +6,7 @@ import time
 from datetime import datetime, timedelta
 
 from . import base, package, utils
+from .config import config
 from .connection import Connection
 
 _logger = logging.getLogger(__name__)
@@ -18,11 +19,7 @@ class Tunnel:
         self,
         *,
         protocol=base.ProtocolType.TCP,
-        bantime=60,
         chunk_size=65536,
-        max_clients=0,
-        max_connects=0,
-        idle_timeout=0,
         networks=None,
         **kwargs,
     ):
@@ -30,11 +27,11 @@ class Tunnel:
         self.tunnel = None
         self.clients = {}
         self.protocol = protocol
-        self.bantime = bantime
         self.chunk_size = chunk_size
-        self.max_clients = max_clients
-        self.max_connects = max_connects
-        self.idle_timeout = idle_timeout
+        self.bantime = config["ban-time"]
+        self.max_clients = config["max-clients"]
+        self.max_connects = config["max-connects"]
+        self.idle_timeout = config["idle-timeout"]
         self.networks = networks or []
 
     def __contains__(self, token):
@@ -50,6 +47,12 @@ class Tunnel:
     @property
     def uuid(self):
         return self.tunnel.uuid
+
+    def info(self, msg, *args):
+        _logger.info("Tunnel %s " + msg, self.uuid, *args)
+
+    def error(self, msg, *args):
+        _logger.error("Tunnel %s " + msg, self.uuid, *args)
 
     def add(self, client):
         if client.token in self.clients:
@@ -76,15 +79,11 @@ class Tunnel:
 
         # Just output the current configuration
         networks = self.networks if self.networks else ["0.0.0.0/0", "::/0"]
-        _logger.info("Allowed networks: %s", ", ".join(map(str, networks)))
-        _logger.info("Tunnel %s ban time: %s", self.uuid, self.bantime or "off")
-        _logger.info("Tunnel %s clients: %s", self.uuid, self.max_clients or "off")
-        _logger.info(
-            "Tunnel %s idle timeout: %s", self.uuid, self.idle_timeout or "off",
-        )
-        _logger.info(
-            "Tunnel %s connections per IP: %s", self.uuid, self.max_connects or "off",
-        )
+        self.info("Allowed networks: %s", ", ".join(map(str, networks)))
+        self.info("ban time: %s", self.bantime or "off")
+        self.info("clients: %s", self.max_clients or "-")
+        self.info("idle timeout: %s", self.idle_timeout or "off")
+        self.info("connections per IP: %s", self.max_connects or "-")
 
     async def _disconnect_client(self, token):
         """ Disconnect a client """
@@ -97,7 +96,7 @@ class Tunnel:
         """ This methods will get called regularly to apply timeouts """
         if self.idle_timeout and self.tunnel:
             if time.time() - self.tunnel.last_time > self.idle_timeout:
-                _logger.info("Tunnel %s timeout", self.uuid)
+                self.info("timeout")
                 await self.stop()
 
     async def stop(self):
@@ -215,12 +214,7 @@ class TunnelClient(Tunnel):
 
                 # Output the public addresses
                 for ip_type, port in sorted(self.addresses):
-                    _logger.info(
-                        "Tunnel %s open: %s on port %s",
-                        self.tunnel.uuid,
-                        ip_type.name,
-                        port,
-                    )
+                    self.info("open: %s on port %s", ip_type.name, port)
 
                 # Send the configuration to the server for negotiation
                 await self._send_config()
@@ -238,7 +232,7 @@ class TunnelClient(Tunnel):
                 await self._send_data(pkg)
             else:
                 # Something unexpected happend
-                _logger.error("Invalid package: %s", pkg)
+                self.error("invalid package: %s", pkg)
                 break
 
     async def loop(self):
@@ -296,13 +290,13 @@ class TunnelServer(Tunnel):
                 self.connections.pop(ip)
                 _logger.info("Connection number of %s resetted", ip)
 
-    async def _client_accept(self, reader, writer):
+    async def _client_accept(self, reader, writer, read_ahead=None):
         """ Accept new clients and inform the tunnel about connections """
         host, port = writer.get_extra_info("peername")[:2]
         ip = ipaddress.ip_address(host)
+        _logger.info("%s: %s", reader, writer)
 
         # Block connections using the networks
-        print(self.block(ip), ip, self.networks)
         if self.block(ip):
             reader.feed_eof()
             writer.close()
@@ -323,6 +317,10 @@ class TunnelServer(Tunnel):
         pkg = package.ClientInitPackage(ip, port, client.token)
         await self.tunnel.tun_write(pkg)
 
+        # Send the buffer read ahead of initialization through the tunnel
+        if read_ahead:
+            await self.tunnel.tun_data(client.token, read_ahead)
+
         # Serve data from the client
         while True:
             data = await client.read(self.chunk_size)
@@ -332,16 +330,14 @@ class TunnelServer(Tunnel):
 
             await self.tunnel.tun_data(client.token, data)
 
-        if self.server.is_serving():
+        if self.server and self.server.is_serving():
             pkg = package.ClientClosePackage(client.token)
             await self.tunnel.tun_write(pkg)
 
         await self._disconnect_client(client.token)
 
-    async def _open_server(self, pkg):
+    async def _open_server(self):
         """ Open the public server listener and start the main loop """
-
-        self.protocol = pkg.protocol
         _logger.info("Using protocol: %s", self.protocol.name)
 
         # Start to listen on an external port
@@ -351,10 +347,8 @@ class TunnelServer(Tunnel):
             await self.stop()
             return False
 
-        _logger.error("%s: %s [%s]", self.tunnel_host, port, self.ports)
-
         self.server = await asyncio.start_server(
-            self._client_accept, self.tunnel_host, port
+            self._client_accept, self.tunnel_host, port,
         )
         asyncio.create_task(self._client_loop(self.server))
         return True
@@ -365,7 +359,7 @@ class TunnelServer(Tunnel):
 
         # Initialize the tunnel by sending the appropiate data
         out = " ".join(sorted(f"{host}:{port}" for host, port in addresses))
-        _logger.info("Tunnel %s listen on %s", self.uuid, out)
+        self.info("listen on %s", out)
 
         addresses = [(base.InternetType.from_ip(ip), port) for ip, port in addresses]
         pkg = package.InitPackage(self.token, addresses)
@@ -383,7 +377,12 @@ class TunnelServer(Tunnel):
             pkg = await self.tunnel.tun_read()
             # Start the server
             if isinstance(pkg, package.ConnectPackage):
-                if not await self._open_server(pkg):
+                self.protocol = pkg.protocol
+
+                if self.protocol != base.ProtocolType.TCP:
+                    continue
+
+                if not await self._open_server():
                     break
             # Handle configuration
             elif isinstance(pkg, package.ConfigPackage):
@@ -415,13 +414,11 @@ class TunnelServer(Tunnel):
             self.server.close()
             await self.server.wait_closed()
 
-        _logger.info("Tunnel %s closed", self.uuid)
+        self.info("closed")
 
     async def loop(self):
         """ Main loop of the proxy tunnel """
-        _logger.info(
-            "Tunnel %s connected %s:%s", self.uuid, self.host, self.port,
-        )
+        self.info("connected %s:%s", self.host, self.port)
 
         try:
             await self._serve()

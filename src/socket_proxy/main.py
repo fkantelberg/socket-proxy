@@ -3,10 +3,11 @@ import argparse
 import logging
 import sys
 
-from . import base, utils
+from .base import DEFAULT_HTTP_PORT, DEFAULT_LOG_LEVEL, DEFAULT_PORT, LOG_LEVELS
 from .config import OptionType, config
 from .proxy import ProxyServer
 from .tunnel import TunnelClient
+from .utils import configure_logging
 
 _logger = logging.getLogger(__name__)
 
@@ -81,12 +82,28 @@ def connection_group(parser, server: bool):
             "--listen",
             dest="listen",
             metavar="[host[,host]*][:port]",
-            default=("", base.DEFAULT_PORT),
             type=OptionType["listen"],
             help=f"The address to listen on. If host is not given the server will "
             f"listen for connections from all IPs. If you want to listen on multiple "
             f"interfaces you can separate them by comma. If the port is not given "
-            f"the server will listen on port {base.DEFAULT_PORT}.",
+            f"the server will listen on port {DEFAULT_PORT}.",
+        )
+        group.add_argument(
+            "--http-domain",
+            type=OptionType["http-domain"],
+            help="Specify the domain under which the sub-domains for the HTTP "
+            "proxies will be created. If not specified the server won't be able to "
+            "handle HTTP proxies.",
+        )
+        group.add_argument(
+            "--http-listen",
+            type=OptionType["http-listen"],
+            metavar="[host[,host]*][:port]",
+            help=f"The address to listen on for HTTP proxies. If host is not given "
+            f"the server will listen for connections from all IPs. If you want to "
+            f"listen on multiple interfaces you can separate them by comma. If the "
+            f"port is not given the server will listen on port "
+            f"{DEFAULT_HTTP_PORT}.",
         )
     else:
         group.add_argument(
@@ -96,7 +113,7 @@ def connection_group(parser, server: bool):
             metavar="host[:port]",
             type=OptionType["connect"],
             help=f"The address to connect with host[:port]. Required for clients. "
-            f"(default: {base.DEFAULT_PORT})",
+            f"(default: {DEFAULT_PORT})",
         )
         group.add_argument(
             "-d",
@@ -106,6 +123,11 @@ def connection_group(parser, server: bool):
             type=OptionType["dst"],
             help="Target host and port for the connection. If the host is not "
             "given localhost will be used.",
+        )
+        group.add_argument(
+            "--protocol",
+            type=OptionType["protocol"],
+            help="Select the protocol to be used. (default: tcp)",
         )
 
 
@@ -117,8 +139,8 @@ def logging_group(parser):
     )
     group.add_argument(
         "--log-level",
-        choices=sorted(base.LOG_LEVELS),
-        default=base.DEFAULT_LOG_LEVEL,
+        choices=sorted(LOG_LEVELS),
+        default=DEFAULT_LOG_LEVEL,
         help="Set the log level to use. (default: %(default)s)",
     )
 
@@ -175,7 +197,6 @@ def option_group(parser, server: bool):
         )
         group.add_argument(
             "--tunnel-host",
-            default=None,
             help="The IP the tunnels listen on. Supports the usage of commas to "
             "listen on different IPs. Each IP gets a different port. If not specified "
             "the tunnels will listen on 2 ports for all IPv4 and IPv6 connections.",
@@ -183,7 +204,6 @@ def option_group(parser, server: bool):
         group.add_argument(
             "--ports",
             type=OptionType["ports"],
-            default=None,
             help="Range of ports to use for the sockets.",
         )
 
@@ -229,14 +249,11 @@ def run_client():
 
     cli = TunnelClient(
         *config["connect"],
-        *config["args.dst"],
+        *config["dst"],
         ca=config["ca"],
         cert=config["cert"],
         key=config["key"],
-        bantime=config["ban-time"],
-        max_clients=config["max-clients"],
-        max_connects=config["max-connects"],
-        idle_timeout=config["idle-timeout"],
+        protocol=config["protocol"],
         verify_hostname=not config["no-verify-hostname"],
         networks=config["networks"],
     )
@@ -254,11 +271,7 @@ def run_server():
         ca=config["ca"],
         cert=config["cert"],
         key=config["key"],
-        bantime=config["ban-time"],
-        max_clients=config["max-clients"],
-        max_connects=config["max-connects"],
-        max_tunnels=config["max-tunnels"],
-        idle_timeout=config["idle-timeout"],
+        http_domain=config["http-domain"],
         tunnel_host=config["tunnel-host"],
         ports=config["ports"],
         networks=config["networks"],
@@ -276,7 +289,7 @@ def main(args=None):
 
     config.load_arguments(args)
 
-    utils.configure_logging(args.log_file, args.log_level)
+    configure_logging(args.log_file, args.log_level)
 
     try:
         if args.mode == "server":

@@ -9,6 +9,8 @@ def to_bool(x):
 
 OptionDefault = {
     "ban-time": 60,
+    "http-domain": None,
+    "http-listen": ("", base.DEFAULT_HTTP_PORT),
     "idle-timeout": 0,
     "listen": ("", base.DEFAULT_PORT),
     "log-file": base.DEFAULT_LOG_LEVEL,
@@ -19,6 +21,7 @@ OptionDefault = {
     "networks": [],
     "no-verify-hostname": False,
     "ports": None,
+    "protocol": base.ProtocolType.TCP,
     "tunnel-host": None,
 }
 
@@ -29,6 +32,10 @@ OptionType = {
     "cert": utils.valid_file,
     "connect": lambda x: utils.parse_address(x, port=base.DEFAULT_PORT),
     "dst": lambda x: utils.parse_address(x, host="localhost"),
+    "http-domain": str,
+    "http-listen": lambda x: utils.parse_address(
+        x, host="", port=base.DEFAULT_HTTP_PORT, multiple=True,
+    ),
     "idle-timeout": int,
     "key": utils.valid_file,
     "listen": lambda x: utils.parse_address(
@@ -42,6 +49,7 @@ OptionType = {
     "networks": utils.parse_networks,
     "no-verify-hostname": to_bool,
     "ports": utils.valid_ports,
+    "protocol": base.ProtocolType.from_str,
     "tunnel-host": str,
 }
 

@@ -33,6 +33,16 @@ def test_to_bool():
     assert to_bool("False") is False
 
 
+def test_protocol_from_string():
+    assert base.ProtocolType.from_str("tcp") == base.ProtocolType.TCP
+    assert base.ProtocolType.from_str("tcP") == base.ProtocolType.TCP
+    assert base.ProtocolType.from_str("TCP") == base.ProtocolType.TCP
+    assert base.ProtocolType.from_str("http") == base.ProtocolType.HTTP
+
+    with pytest.raises(ValueError):
+        base.ProtocolType.from_str("tcpa")
+
+
 def test_config():
     with NamedTemporaryFile() as fp:
         fp.write(b"[server]\nban-time=15\nports=7000:9000\n[client]\nban-time=20\n")

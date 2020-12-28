@@ -8,6 +8,7 @@ _logger = logging.getLogger(__name__)
 CLIENT_NAME_SIZE = 8
 INTERVAL_TIME = 1
 DEFAULT_PORT = 2773
+DEFAULT_HTTP_PORT = 8773
 DEFAULT_LOG_LEVEL = "info"
 LOG_FORMAT = "{asctime} [{levelname:^8}] {message}"
 
@@ -59,6 +60,15 @@ class ProtocolType(enum.IntEnum):
     """ Helper class for supported protocols """
 
     TCP = 0x01
+    HTTP = 0x02
+
+    @staticmethod
+    def from_str(protocol):
+        if protocol.upper() == "TCP":
+            return ProtocolType.TCP
+        if protocol.upper() == "HTTP":
+            return ProtocolType.HTTP
+        raise ValueError("Invalid protocol")
 
 
 class Ban:

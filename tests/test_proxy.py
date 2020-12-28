@@ -9,6 +9,7 @@ from unittest import mock
 import pytest
 import pytest_asyncio.plugin
 from socket_proxy import base, connection, package, proxy, tunnel, utils
+from socket_proxy.config import config
 
 CA_CERT = "pki/ca.pem"
 CLIENT_CERT = "pki/client.pem"
@@ -194,7 +195,8 @@ async def test_tunnel_client_management():
     other.token = b"\xff" * base.CLIENT_NAME_SIZE
 
     # Create without clients
-    tun = tunnel.Tunnel(max_clients=1)
+    config["max-clients"] = 1
+    tun = tunnel.Tunnel()
     assert len(tun.clients) == 0
 
     # Add client and get back by token
@@ -222,7 +224,8 @@ async def test_tunnel_client_management():
 
 @pytest.mark.asyncio
 async def test_tunnel_timeout():
-    tun = tunnel.Tunnel(max_clients=1)
+    config["max-clients"] = 1
+    tun = tunnel.Tunnel()
     tun.stop = mock.AsyncMock()
     tun.tunnel = mock.MagicMock()
 
@@ -291,7 +294,8 @@ async def test_tunnel_server():
     writer.get_extra_info = mock.MagicMock()
     writer.get_extra_info.return_value = ("127.0.0.1", TCP_PORT)
 
-    server = tunnel.TunnelServer(reader, writer, max_connects=1)
+    config["max-connects"] = 1
+    server = tunnel.TunnelServer(reader, writer)
 
     # Test connection bans
     server.add = raiseAssert

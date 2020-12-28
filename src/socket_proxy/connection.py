@@ -50,12 +50,9 @@ class Connection:
             pass
 
     async def tun_read(self):
-        pkg = await package.Package.from_reader(self)
-        _logger.info("Package received: %s", pkg)
-        return pkg
+        return await package.Package.from_reader(self)
 
     async def tun_write(self, pkg):
-        _logger.info("Package sent: %s", pkg)
         self.write(pkg.to_bytes())
         await self.drain()
 

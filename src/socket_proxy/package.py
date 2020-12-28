@@ -81,7 +81,8 @@ class Package(metaclass=MetaPackage):
 
             pcls = _package_registry[ptype]
             return pcls(*await pcls.recv(reader))
-        except Exception:
+        except Exception as e:
+            _logger.exception(e)
             return None
 
 
