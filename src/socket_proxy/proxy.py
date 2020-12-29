@@ -4,7 +4,7 @@ import re
 
 from . import base, utils
 from .config import config
-from .tunnel import TunnelServer
+from .tunnel_server import TunnelServer
 
 _logger = logging.getLogger(__name__)
 

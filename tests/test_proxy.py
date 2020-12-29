@@ -8,8 +8,17 @@ from unittest import mock
 
 import pytest
 import pytest_asyncio.plugin
-from socket_proxy import base, connection, package, proxy, tunnel, utils
-from socket_proxy.config import config
+from socket_proxy import (
+    Tunnel,
+    TunnelClient,
+    TunnelServer,
+    base,
+    config,
+    connection,
+    package,
+    proxy,
+    utils,
+)
 
 CA_CERT = "pki/ca.pem"
 CLIENT_CERT = "pki/client.pem"
@@ -65,7 +74,7 @@ async def server(event_loop):
     server = proxy.ProxyServer(
         host="", port=TCP_PORT, cert=SERVER_CERT, key=SERVER_KEY, ca=CA_CERT,
     )
-    tunnel.Tunnel._interval = mock.AsyncMock()
+    Tunnel._interval = mock.AsyncMock()
     event_loop.create_task(server.loop())
     await asyncio.sleep(0.1)
     yield server
@@ -75,7 +84,7 @@ async def server(event_loop):
 
 @pytest.fixture
 async def client(event_loop):
-    client = tunnel.TunnelClient(
+    client = TunnelClient(
         host="localhost",
         port=TCP_PORT,
         dst_host="localhost",
@@ -84,7 +93,7 @@ async def client(event_loop):
         key=CLIENT_KEY,
         ca=CA_CERT,
     )
-    tunnel.Tunnel._interval = mock.AsyncMock()
+    Tunnel._interval = mock.AsyncMock()
     event_loop.create_task(client.loop())
     await asyncio.sleep(0.1)
     yield client
@@ -102,7 +111,7 @@ async def http_server(event_loop):
         ca=CA_CERT,
         http_domain="example.org",
     )
-    tunnel.Tunnel._interval = mock.AsyncMock()
+    Tunnel._interval = mock.AsyncMock()
     event_loop.create_task(server.loop())
     await asyncio.sleep(0.1)
     yield server
@@ -112,7 +121,7 @@ async def http_server(event_loop):
 
 @pytest.fixture
 async def http_client(event_loop):
-    client = tunnel.TunnelClient(
+    client = TunnelClient(
         host="localhost",
         port=TCP_PORT,
         dst_host="localhost",
@@ -122,7 +131,7 @@ async def http_client(event_loop):
         ca=CA_CERT,
         protocol=base.ProtocolType.HTTP,
     )
-    tunnel.Tunnel._interval = mock.AsyncMock()
+    Tunnel._interval = mock.AsyncMock()
     event_loop.create_task(client.loop())
     await asyncio.sleep(0.1)
     yield client
@@ -145,7 +154,7 @@ async def test_tunnel_idle():
         else:
             raise AssertionError()
 
-    tun = tunnel.Tunnel()
+    tun = Tunnel()
     tun.idle = idle
     base.INTERVAL_TIME = 0.01
 
@@ -258,7 +267,7 @@ def test_start_functions():
     server.start()
     assert server.loop.call_count
 
-    client = tunnel.TunnelClient("", TCP_PORT, "", TCP_PORT_DUMMY, None)
+    client = TunnelClient("", TCP_PORT, "", TCP_PORT_DUMMY, None)
     client.loop = mock.AsyncMock()
     client.start()
     assert client.loop.call_count
@@ -273,7 +282,7 @@ async def test_tunnel_client_management():
 
     # Create without clients
     config["max-clients"] = 1
-    tun = tunnel.Tunnel()
+    tun = Tunnel()
     assert len(tun.clients) == 0
 
     # Add client and get back by token
@@ -302,7 +311,7 @@ async def test_tunnel_client_management():
 @pytest.mark.asyncio
 async def test_tunnel_timeout():
     config["max-clients"] = 1
-    tun = tunnel.Tunnel()
+    tun = Tunnel()
     tun.stop = mock.AsyncMock()
     tun.tunnel = mock.MagicMock()
 
@@ -329,7 +338,7 @@ async def test_tunnel_client():
     cli.token = b"\x00" * base.CLIENT_NAME_SIZE
     cli.read.return_value = None
 
-    client = tunnel.TunnelClient("", TCP_PORT, "", TCP_PORT_DUMMY, None)
+    client = TunnelClient("", TCP_PORT, "", TCP_PORT_DUMMY, None)
     client._disconnect_client = mock.AsyncMock()
     client.add(cli)
     client.tunnel = mock.AsyncMock()
@@ -372,7 +381,7 @@ async def test_tunnel_server():
     writer.get_extra_info.return_value = ("127.0.0.1", TCP_PORT)
 
     config["max-connects"] = 1
-    server = tunnel.TunnelServer(reader, writer)
+    server = TunnelServer(reader, writer)
 
     # Test connection bans
     server.add = raiseAssert

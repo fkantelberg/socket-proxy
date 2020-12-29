@@ -6,7 +6,7 @@ import sys
 from .base import DEFAULT_HTTP_PORT, DEFAULT_LOG_LEVEL, DEFAULT_PORT, LOG_LEVELS
 from .config import OptionType, config
 from .proxy import ProxyServer
-from .tunnel import TunnelClient
+from .tunnel_client import TunnelClient
 from .utils import configure_logging
 
 _logger = logging.getLogger(__name__)

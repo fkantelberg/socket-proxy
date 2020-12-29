@@ -1,0 +1,180 @@
+import asyncio
+import collections
+import ipaddress
+import logging
+from datetime import datetime, timedelta
+
+from . import base, package, tunnel, utils
+from .connection import Connection
+
+_logger = logging.getLogger(__name__)
+
+
+class TunnelServer(tunnel.Tunnel):
+    """ Server side of the tunnel to listen for external connections """
+
+    def __init__(
+        self, reader, writer, *, domain="", tunnel_host=None, ports=None, **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.tunnel = Connection(reader, writer, token=utils.generate_token())
+        self.domain = f"{self.uuid}.{domain}"
+        self.host, self.port = writer.get_extra_info("peername")[:2]
+        self.tunnel_host = tunnel_host.split(",") if tunnel_host else ""
+        self.ports = ports
+        self.server = None
+        self.connections = collections.defaultdict(base.Ban)
+
+    def block(self, ip):
+        """ Decide whether the ip should be blocked """
+        if 0 < self.max_connects <= self.connections[ip].hits:
+            return True
+
+        if self.networks and not any(ip in n for n in self.networks):
+            return True
+
+        return False
+
+    async def idle(self):
+        await super().idle()
+
+        # Clear the connections
+        dt = datetime.now() - timedelta(seconds=self.bantime)
+        for ip, ban in list(self.connections.items()):
+            if ban.first < dt:
+                self.connections.pop(ip)
+                _logger.info("Connection number of %s resetted", ip)
+
+    async def _client_accept(self, reader, writer, read_ahead=None):
+        """ Accept new clients and inform the tunnel about connections """
+        host, port = writer.get_extra_info("peername")[:2]
+        ip = ipaddress.ip_address(host)
+
+        # Block connections using the networks
+        if self.block(ip):
+            reader.feed_eof()
+            writer.close()
+            await writer.wait_closed()
+
+            _logger.info("Connection from %s blocked", ip)
+            return
+
+        self.connections[ip].hits += 1
+
+        # Create the client object and generate an unique token
+        client = Connection(reader, writer, self.protocol, utils.generate_token())
+        self.add(client)
+
+        _logger.info("Client %s connected on %s:%s", client.uuid, host, port)
+
+        # Inform the tunnel about the new client
+        pkg = package.ClientInitPackage(ip, port, client.token)
+        await self.tunnel.tun_write(pkg)
+
+        # Send the buffer read ahead of initialization through the tunnel
+        if read_ahead:
+            await self.tunnel.tun_data(client.token, read_ahead)
+
+        # Serve data from the client
+        while True:
+            data = await client.read(self.chunk_size)
+            # Client disconnected. Inform the tunnel
+            if not data:
+                break
+
+            await self.tunnel.tun_data(client.token, data)
+
+        if self.server and self.server.is_serving():
+            pkg = package.ClientClosePackage(client.token)
+            await self.tunnel.tun_write(pkg)
+
+        await self._disconnect_client(client.token)
+
+    async def _open_server(self):
+        """ Open the public server listener and start the main loop """
+        _logger.info("Using protocol: %s", self.protocol.name)
+
+        # Start to listen on an external port
+        port = utils.get_unused_port(*self.ports) if self.ports else 0
+        if port is None:
+            _logger.error("All ports are blocked")
+            await self.stop()
+            return False
+
+        self.server = await asyncio.start_server(
+            self._client_accept, self.tunnel_host, port,
+        )
+        asyncio.create_task(self._client_loop(self.server))
+        return True
+
+    async def _client_loop(self, server):
+        """ Main client loop initializing the client and managing the transmission """
+        addresses = [sock.getsockname()[:2] for sock in server.sockets]
+
+        # Initialize the tunnel by sending the appropiate data
+        out = " ".join(sorted(f"{host}:{port}" for host, port in addresses))
+        self.info("listen on %s", out)
+
+        addresses = [(base.InternetType.from_ip(ip), port) for ip, port in addresses]
+        pkg = package.InitPackage(self.token, addresses, self.domain)
+        await self.tunnel.tun_write(pkg)
+
+        # Start listening
+        async with server:
+            await server.serve_forever()
+
+    async def _serve(self):
+        """ Listen on the tunnel """
+        await super()._serve()
+
+        while True:
+            pkg = await self.tunnel.tun_read()
+            # Start the server
+            if isinstance(pkg, package.ConnectPackage):
+                self.protocol = pkg.protocol
+
+                if self.protocol != base.ProtocolType.TCP:
+                    pkg = package.InitPackage(self.token, [], self.domain)
+                    await self.tunnel.tun_write(pkg)
+                elif not await self._open_server():
+                    break
+            # Handle configuration
+            elif isinstance(pkg, package.ConfigPackage):
+                self.config_from_package(pkg)
+                await self._send_config()
+            # Handle a closed client
+            elif isinstance(pkg, package.ClientClosePackage):
+                await self._disconnect_client(pkg.token)
+            # Handle data coming through the tunnel
+            elif isinstance(pkg, package.ClientDataPackage):
+                # Check for valid tokens
+                if pkg.token not in self:
+                    _logger.error("Invalid client token: %s", pkg.token)
+                    break
+
+                conn = self[pkg.token]
+                conn.write(pkg.data)
+                await conn.drain()
+            # Invalid package means to close the connection
+            else:
+                self.error("invalid package: %s", pkg)
+                break
+
+    async def stop(self):
+        """ Stop everything """
+        await super().stop()
+
+        if self.server:
+            self.server.close()
+            await self.server.wait_closed()
+
+        self.info("closed")
+
+    async def loop(self):
+        """ Main loop of the proxy tunnel """
+        self.info("connected %s:%s", self.host, self.port)
+
+        try:
+            await self._serve()
+        finally:
+            await self.stop()
