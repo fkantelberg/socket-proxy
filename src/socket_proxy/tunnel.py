@@ -18,6 +18,7 @@ class Tunnel:
     def __init__(
         self,
         *,
+        domain="",
         protocol=base.ProtocolType.TCP,
         chunk_size=65536,
         networks=None,
@@ -27,6 +28,7 @@ class Tunnel:
         self.tunnel = None
         self.clients = {}
         self.protocol = protocol
+        self.domain = domain or ""
         self.chunk_size = chunk_size
         self.bantime = config["ban-time"]
         self.max_clients = config["max-clients"]
@@ -154,6 +156,12 @@ class TunnelClient(Tunnel):
             cert=cert, key=key, ca=ca, check_hostname=verify_hostname,
         )
 
+    def info(self, msg, *args):
+        _logger.info(msg.capitalize(), *args)
+
+    def error(self, msg, *args):
+        _logger.error(msg.capitalize(), *args)
+
     async def _client_loop(self, client):
         """ This is the main client loop """
         _logger.info("Client %s connected", client.token.hex())
@@ -211,10 +219,14 @@ class TunnelClient(Tunnel):
                 # The tunnel was initialized
                 self.tunnel.token = pkg.token
                 self.addresses = pkg.addresses
+                self.domain = pkg.domain
 
                 # Output the public addresses
                 for ip_type, port in sorted(self.addresses):
                     self.info("open: %s on port %s", ip_type.name, port)
+
+                if self.protocol == base.ProtocolType.HTTP:
+                    self.info("domain: %s", self.domain)
 
                 # Send the configuration to the server for negotiation
                 await self._send_config()
@@ -261,9 +273,12 @@ class TunnelClient(Tunnel):
 class TunnelServer(Tunnel):
     """ Server side of the tunnel to listen for external connections """
 
-    def __init__(self, reader, writer, *, tunnel_host=None, ports=None, **kwargs):
+    def __init__(
+        self, reader, writer, *, domain="", tunnel_host=None, ports=None, **kwargs,
+    ):
         super().__init__(**kwargs)
         self.tunnel = Connection(reader, writer, token=utils.generate_token())
+        self.domain = f"{self.uuid}.{domain}"
         self.host, self.port = writer.get_extra_info("peername")[:2]
         self.tunnel_host = tunnel_host.split(",") if tunnel_host else ""
         self.ports = ports
@@ -361,7 +376,7 @@ class TunnelServer(Tunnel):
         self.info("listen on %s", out)
 
         addresses = [(base.InternetType.from_ip(ip), port) for ip, port in addresses]
-        pkg = package.InitPackage(self.token, addresses)
+        pkg = package.InitPackage(self.token, addresses, self.domain)
         await self.tunnel.tun_write(pkg)
 
         # Start listening
@@ -379,9 +394,9 @@ class TunnelServer(Tunnel):
                 self.protocol = pkg.protocol
 
                 if self.protocol != base.ProtocolType.TCP:
-                    continue
-
-                if not await self._open_server():
+                    pkg = package.InitPackage(self.token, [], self.domain)
+                    await self.tunnel.tun_write(pkg)
+                elif not await self._open_server():
                     break
             # Handle configuration
             elif isinstance(pkg, package.ConfigPackage):
@@ -402,7 +417,7 @@ class TunnelServer(Tunnel):
                 await conn.drain()
             # Invalid package means to close the connection
             else:
-                _logger.error("Invalid package: %s", pkg)
+                self.error("invalid package: %s", pkg)
                 break
 
     async def stop(self):

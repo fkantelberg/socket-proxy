@@ -116,9 +116,7 @@ def optimize_networks(*networks):
                 tmp.add(a)
         groups[version] = sorted(tmp)
 
-    result = sum([g for _, g in sorted(groups.items())], [])
-    _logger.info(result)
-    return result
+    return sum([g for _, g in sorted(groups.items())], [])
 
 
 def parse_address(address, host=None, port=None, multiple=False):

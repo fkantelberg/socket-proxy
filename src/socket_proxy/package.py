@@ -32,6 +32,11 @@ class PackageStruct(struct.Struct):
         ip_type = base.InternetType.from_ip(ip)
         return struct.pack("!BB", ip_type, network.prefixlen) + ip.packed
 
+    @classmethod
+    def pack_string(cls, value):
+        value = value.encode()
+        return struct.pack("!I", len(value)) + value
+
     async def read(self, reader):
         return self.unpack(await reader.readexactly(self.size))
 
@@ -45,6 +50,11 @@ class PackageStruct(struct.Struct):
         else:
             raise base.InvalidPackage()
         return ipaddress.ip_network(f"{ip}/{prefixlen}")
+
+    @classmethod
+    async def read_string(cls, reader):
+        (length,) = await cls("!I").read(reader)
+        return (await reader.readexactly(length)).decode()
 
 
 class Package(metaclass=MetaPackage):
@@ -81,8 +91,7 @@ class Package(metaclass=MetaPackage):
 
             pcls = _package_registry[ptype]
             return pcls(*await pcls.recv(reader))
-        except Exception as e:
-            _logger.exception(e)
+        except Exception:
             return None
 
 
@@ -116,26 +125,28 @@ class InitPackage(Package):
     """ Package to initialize the tunnel which sends the external port. The number of
         addresses is limitted to 255
 
-        Structure: <SUPER> <tunnel token> <number of ports> (<type of port> <external port>)*
+        Structure: <SUPER> <tunnel token> <number of ports>
+                   (<type of port> <external port>)* <length of domain> <domain>
     """
 
     _name = "init"
     _type = 0x10
-    __slots__ = ("token", "addresses")
+    __slots__ = ("token", "addresses", "domain")
 
     INIT = PackageStruct(f"!{base.CLIENT_NAME_SIZE}sB")
     ADDRESS = PackageStruct("!BH")
 
-    def __init__(self, token, addresses, *args, **kwargs):
+    def __init__(self, token, addresses, domain, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.token = token
         self.addresses = addresses[:255]
+        self.domain = domain
 
     def to_bytes(self):
         data = super().to_bytes() + self.INIT.pack(self.token, len(self.addresses))
         for address in self.addresses:
             data += self.ADDRESS.pack(*address)
-        return data
+        return data + PackageStruct.pack_string(self.domain)
 
     @classmethod
     async def recv(cls, reader):
@@ -146,7 +157,8 @@ class InitPackage(Package):
             ip_type, port = await cls.ADDRESS.read(reader)
             addresses.append((base.InternetType(ip_type), port))
 
-        return (token, addresses) + res
+        domain = await PackageStruct.read_string(reader)
+        return (token, addresses, domain) + res
 
 
 class ConfigPackage(Package):

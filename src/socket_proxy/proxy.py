@@ -26,25 +26,22 @@ class ProxyServer:
         self.sc = utils.generate_ssl_context(cert=cert, key=key, ca=ca, server=True)
 
         if isinstance(http_domain, str):
-            http_domain = http_domain.encode()
-
-        if isinstance(http_domain, bytes):
-            self.http_domain = re.compile(
-                rb"^(.*)\.%s$" % http_domain.replace(b".", rb"\.")
+            self.http_domain = http_domain
+            self.http_domain_regex = re.compile(
+                rb"^(.*)\.%s$" % http_domain.replace(".", r"\.").encode()
             )
         else:
-            self.http_domain = False
+            self.http_domain = self.http_domain_regex = False
 
     async def _accept(self, reader, writer):
         """ Accept new tunnels and start to listen for clients """
 
         # Limit the number of tunnels
-        _logger.info("Accept %s, %s", reader, writer)
         if 0 < self.max_tunnels <= len(self.tunnels):
             return
 
         # Create the tunnel object and generate an unique token
-        tunnel = TunnelServer(reader, writer, **self.kwargs)
+        tunnel = TunnelServer(reader, writer, domain=self.http_domain, **self.kwargs)
         self.tunnels[tunnel.uuid] = tunnel
         try:
             await tunnel.loop()
@@ -79,7 +76,7 @@ class ProxyServer:
 
         # Extract the host from the headers and try matching them
         host = headers.get(b"X-Forwarded-Host", headers.get(b"Host", b""))
-        match = self.http_domain.match(host)
+        match = self.http_domain_regex.match(host)
         if not match or len(match.groups()) < 1:
             writer.write(b"%s 404 Not Found\r\n\r\n" % version)
             await writer.drain()
@@ -119,7 +116,7 @@ class ProxyServer:
 
     async def loop(self):
         """ Main server loop to wait for tunnels to open """
-        if self.http_domain:
+        if self.http_domain_regex:
             asyncio.create_task(self.http_loop())
 
         self.server = await asyncio.start_server(

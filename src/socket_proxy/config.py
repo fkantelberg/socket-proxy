@@ -87,8 +87,9 @@ class Configuration:
     def load_arguments(self, args):
         for opt in OptionType:
             arg = opt.replace("-", "_")
-            if hasattr(args, arg):
-                self[opt] = getattr(args, arg)
+            val = getattr(args, arg, None)
+            if self.get(opt) is None or val is not None:
+                self[opt] = val
 
 
 config = Configuration()
