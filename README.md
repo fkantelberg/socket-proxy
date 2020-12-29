@@ -4,23 +4,28 @@
 
 # socket-proxy
 
-This tool allows to forward TCP ports to a server and make them accessible through ports
-of the server. It consists of a client and server part. The server is listening for
-incoming connections from clients and creates additional listeners upon connection.
-These can be used to directly contact the TCP port set up as destination in the
-connecting client.
+This tool allows to forward TCP or HTTP ports to a server and make them available through the server.
+TCP ports will be mapped to ports of the server. HTTP forwarding is done with a simple reverse
+proxy using sub-domains. It consists of a client and server part. The server is listening for
+incoming connections from clients and creates additional listeners upon connection. These can be
+used to directly contact the TCP port set up as destination in the connecting client.
 
 ### Security
 
-With this tool you are publishing local ports which might cause security issues for
-non-hardened ports.
+With this tool you can publish local service which might cause security issues for non-hardened
+ports. You should consider further security measurements to harden critical systems if used. The
+HTTP implementation is very basic and can't handle HTTPS. It's recommended to use a reverse proxy
+like nginx with SSL and a wildcard certificate if HTTPS is required.
 
 ### Features
 
 - TLS encryption of the tunnel
 - Support for client certificates if CA is specified on the server
 - Support for IPv4 and IPv6
+- Proxy generic TCP ports or more specific HTTP servers
 - Limitation of number of tunnels, clients per tunnel, and connections per IP
+- Limit the access to specific IP's
+- Configuration on server and client side and negotiation of the used settings
 
 ### Usage
 
