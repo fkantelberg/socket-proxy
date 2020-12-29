@@ -21,7 +21,7 @@ class ProxyServer:
         self.kwargs = kwargs
         self.host, self.port = host, port
         self.max_tunnels = config["max-tunnels"]
-        self.http_port = config["http-listen"]
+        self.http_host, self.http_port = config["http-listen"]
         self.tunnels = {}
         self.sc = utils.generate_ssl_context(cert=cert, key=key, ca=ca, server=True)
 
@@ -66,6 +66,7 @@ class ProxyServer:
         headers = {}
         while not reader.at_eof():
             line = await reader.readline()
+            _logger.info("%s", line)
             buf += line
 
             stripped = line.strip()
@@ -77,7 +78,7 @@ class ProxyServer:
                 headers[header] = value
 
         # Extract the host from the headers and try matching them
-        host = headers.get(b"X-Forwarded-Host", headers.get(b"Host", ""))
+        host = headers.get(b"X-Forwarded-Host", headers.get(b"Host", b""))
         match = self.http_domain.match(host)
         if not match or len(match.groups()) < 1:
             writer.write(b"%s 404 Not Found\r\n\r\n" % version)
@@ -87,7 +88,8 @@ class ProxyServer:
 
         # Find the right tunnel for the host
         tun_uuid = match.groups()[0].decode()
-        if tun_uuid in self.tunnels:
+        _logger.error("%s: %s", tun_uuid, self.tunnels)
+        if tun_uuid not in self.tunnels:
             writer.write(b"%s 404 Not Found\r\n\r\n" % version)
             await writer.drain()
             await self.close(reader, writer)
@@ -104,11 +106,12 @@ class ProxyServer:
 
     async def http_loop(self):
         """ Main server loop for the http socket """
-        for host in self.host if isinstance(self.host, list) else [self.host]:
-            _logger.info("Serving on %s:%s", host, self.http_port)
+        host = self.http_host
+        for h in host if isinstance(host, list) else [host]:
+            _logger.info("Serving on %s:%s [HTTP]", h, self.http_port)
 
         self.http_proxy = await asyncio.start_server(
-            self._request, self.host, self.http_port,
+            self._request, self.http_host, self.http_port,
         )
 
         async with self.http_proxy:
@@ -116,7 +119,7 @@ class ProxyServer:
 
     async def loop(self):
         """ Main server loop to wait for tunnels to open """
-        if self.http_port and self.http_domain:
+        if self.http_domain:
             asyncio.create_task(self.http_loop())
 
         self.server = await asyncio.start_server(

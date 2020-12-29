@@ -294,7 +294,6 @@ class TunnelServer(Tunnel):
         """ Accept new clients and inform the tunnel about connections """
         host, port = writer.get_extra_info("peername")[:2]
         ip = ipaddress.ip_address(host)
-        _logger.info("%s: %s", reader, writer)
 
         # Block connections using the networks
         if self.block(ip):

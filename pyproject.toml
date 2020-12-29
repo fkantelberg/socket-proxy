@@ -16,11 +16,12 @@ envlist = clean,py38,report
 deps = pytest
        pytest-asyncio
        pytest-cov
+       pytest-timeout
        coverage
 depends:
     py38: clean
     report: py38
-commands = pytest --cov {envsitepackagesdir}/socket_proxy --cov-append
+commands = pytest --cov {envsitepackagesdir}/socket_proxy --cov-append --timeout 5
 
 [testenv:report]
 skip_install = true

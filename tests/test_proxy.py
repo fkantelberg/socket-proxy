@@ -92,6 +92,44 @@ async def client(event_loop):
     await asyncio.sleep(0.1)
 
 
+@pytest.fixture
+async def http_server(event_loop):
+    server = proxy.ProxyServer(
+        host="",
+        port=TCP_PORT,
+        cert=SERVER_CERT,
+        key=SERVER_KEY,
+        ca=CA_CERT,
+        http_domain="example.org",
+    )
+    tunnel.Tunnel._interval = mock.AsyncMock()
+    event_loop.create_task(server.loop())
+    await asyncio.sleep(0.1)
+    yield server
+    await server.stop()
+    await asyncio.sleep(0.1)
+
+
+@pytest.fixture
+async def http_client(event_loop):
+    client = tunnel.TunnelClient(
+        host="localhost",
+        port=TCP_PORT,
+        dst_host="localhost",
+        dst_port=TCP_PORT_DUMMY,
+        cert=CLIENT_CERT,
+        key=CLIENT_KEY,
+        ca=CA_CERT,
+        protocol=base.ProtocolType.HTTP,
+    )
+    tunnel.Tunnel._interval = mock.AsyncMock()
+    event_loop.create_task(client.loop())
+    await asyncio.sleep(0.1)
+    yield client
+    await client.stop()
+    await asyncio.sleep(0.1)
+
+
 @pytest.mark.asyncio
 async def test_connection_wrong_token():
     conn = connection.Connection(None, None)
@@ -160,6 +198,45 @@ async def test_tunnel_with_dummy(echo_server, server, client):
             assert await connect_and_send("::1", port, b"abc") == b""
 
     await server.stop()
+    await asyncio.sleep(0.1)
+
+
+@pytest.mark.asyncio
+async def test_http_tunnel_with_dummy(echo_server, http_server, http_client):
+    async def connect_and_send(text):
+        reader, writer = await asyncio.open_connection(
+            "127.0.0.1", base.DEFAULT_HTTP_PORT,
+        )
+        writer.write(text)
+        await writer.drain()
+
+        data = await reader.read(1024)
+        writer.close()
+        await writer.wait_closed()
+        return data
+
+    # End to end test with an echo server
+    await asyncio.sleep(0.1)
+
+    request = b"abc\r\n\r\n"
+    assert await connect_and_send(request) == b""
+    request = b"GET / HTTP/1.1\r\n\r\n"
+    assert await connect_and_send(request) == b"HTTP/1.1 404 Not Found\r\n\r\n"
+    request = b"GET / HTTP/1.1\r\nHost: test.example.org\r\n\r\n"
+    assert await connect_and_send(request) == b"HTTP/1.1 404 Not Found\r\n\r\n"
+
+    token = list(http_server.tunnels)[0]
+    request = b"GET / HTTP/1.1\r\nHost: %s.example.org\r\n\r\n" % token.encode()
+    assert await connect_and_send(request) == request
+
+    http_server.tunnels[token].protocol = base.ProtocolType.TCP
+    assert await connect_and_send(request) == b"HTTP/1.1 404 Not Found\r\n\r\n"
+
+    # Close the echo server
+    echo_server.close()
+    await echo_server.wait_closed()
+
+    await http_server.stop()
     await asyncio.sleep(0.1)
 
 
