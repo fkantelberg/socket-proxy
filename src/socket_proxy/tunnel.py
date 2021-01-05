@@ -1,13 +1,9 @@
 import asyncio
-import collections
-import ipaddress
 import logging
 import time
-from datetime import datetime, timedelta
 
 from . import base, package, utils
 from .config import config
-from .connection import Connection
 
 _logger = logging.getLogger(__name__)
 
