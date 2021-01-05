@@ -48,18 +48,10 @@ def security_group(parser, server: bool):
     )
 
     group.add_argument(
-        "--cert",
-        metavar="FILE",
-        type=OptionType["cert"],
-        required=server,
-        help=" ".join(text_cert),
+        "--cert", metavar="FILE", type=OptionType["cert"], help=" ".join(text_cert),
     )
     group.add_argument(
-        "--key",
-        metavar="FILE",
-        type=OptionType["key"],
-        required=server,
-        help=" ".join(text_key),
+        "--key", metavar="FILE", type=OptionType["key"], help=" ".join(text_key),
     )
     group.add_argument(
         "--cipher", help="Ciphers to use for the TLS connection.",
@@ -284,8 +276,6 @@ def main(args=None):
 
     if args.config:
         config.load(args.mode, args.config)
-
-        sys.exit()
 
     config.load_arguments(args)
 

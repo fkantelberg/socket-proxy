@@ -92,7 +92,6 @@ class TunnelServer(tunnel.Tunnel):
 
     async def _open_server(self):
         """ Open the public server listener and start the main loop """
-        _logger.info("Using protocol: %s", self.protocol.name)
 
         # Start to listen on an external port
         port = utils.get_unused_port(*self.ports) if self.ports else 0
@@ -132,8 +131,10 @@ class TunnelServer(tunnel.Tunnel):
             # Start the server
             if isinstance(pkg, package.ConnectPackage):
                 self.protocol = pkg.protocol
+                self.info("using protocol: %s", self.protocol.name)
 
                 if self.protocol != base.ProtocolType.TCP:
+                    self.info("reachable with domain: %s", self.domain)
                     pkg = package.InitPackage(self.token, [], self.domain)
                     await self.tunnel.tun_write(pkg)
                 elif not await self._open_server():
@@ -156,8 +157,10 @@ class TunnelServer(tunnel.Tunnel):
                 conn.write(pkg.data)
                 await conn.drain()
             # Invalid package means to close the connection
-            else:
+            elif pkg is not None:
                 self.error("invalid package: %s", pkg)
+                break
+            else:
                 break
 
     async def stop(self):

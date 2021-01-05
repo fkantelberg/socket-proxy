@@ -118,9 +118,11 @@ class TunnelClient(tunnel.Tunnel):
             elif isinstance(pkg, package.ClientDataPackage):
                 # Manage data coming through the tunnel
                 await self._send_data(pkg)
-            else:
+            elif pkg is not None:
                 # Something unexpected happend
                 self.error("invalid package: %s", pkg)
+                break
+            else:
                 break
 
     async def loop(self):
