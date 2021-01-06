@@ -96,7 +96,7 @@ class TunnelServer(tunnel.Tunnel):
         # Start to listen on an external port
         port = utils.get_unused_port(*self.ports) if self.ports else 0
         if port is None:
-            _logger.error("All ports are blocked")
+            self.error("all ports are blocked")
             await self.stop()
             return False
 
@@ -122,46 +122,51 @@ class TunnelServer(tunnel.Tunnel):
         async with server:
             await server.serve_forever()
 
-    async def _serve(self):
-        """ Listen on the tunnel """
-        await super()._serve()
+    async def _handle(self):
+        pkg = await self.tunnel.tun_read()
+        # Start the server
+        if isinstance(pkg, package.ConnectPackage):
+            self.protocol = pkg.protocol
+            self.info("using protocol: %s", self.protocol.name)
 
-        while True:
-            pkg = await self.tunnel.tun_read()
-            # Start the server
-            if isinstance(pkg, package.ConnectPackage):
-                self.protocol = pkg.protocol
-                self.info("using protocol: %s", self.protocol.name)
+            if self.protocol != base.ProtocolType.TCP:
+                self.info("reachable with domain: %s", self.domain)
+                pkg = package.InitPackage(self.token, [], self.domain)
+                await self.tunnel.tun_write(pkg)
+            elif not await self._open_server():
+                return await super()._handle()
 
-                if self.protocol != base.ProtocolType.TCP:
-                    self.info("reachable with domain: %s", self.domain)
-                    pkg = package.InitPackage(self.token, [], self.domain)
-                    await self.tunnel.tun_write(pkg)
-                elif not await self._open_server():
-                    break
-            # Handle configuration
-            elif isinstance(pkg, package.ConfigPackage):
-                self.config_from_package(pkg)
-                await self._send_config()
-            # Handle a closed client
-            elif isinstance(pkg, package.ClientClosePackage):
-                await self._disconnect_client(pkg.token)
-            # Handle data coming through the tunnel
-            elif isinstance(pkg, package.ClientDataPackage):
-                # Check for valid tokens
-                if pkg.token not in self:
-                    _logger.error("Invalid client token: %s", pkg.token)
-                    break
+            return True
 
-                conn = self[pkg.token]
-                conn.write(pkg.data)
-                await conn.drain()
-            # Invalid package means to close the connection
-            elif pkg is not None:
-                self.error("invalid package: %s", pkg)
-                break
-            else:
-                break
+        # Handle configuration
+        if isinstance(pkg, package.ConfigPackage):
+            self.config_from_package(pkg)
+            await self._send_config()
+            return True
+
+        # Handle a closed client
+        if isinstance(pkg, package.ClientClosePackage):
+            await self._disconnect_client(pkg.token)
+            return True
+
+        # Handle data coming through the tunnel
+        if isinstance(pkg, package.ClientDataPackage):
+            # Check for valid tokens
+            if pkg.token not in self:
+                self.error("invalid client token: %s", pkg.token)
+                return False
+
+            conn = self[pkg.token]
+            conn.write(pkg.data)
+            await conn.drain()
+            return True
+
+        # Invalid package means to close the connection
+        if pkg is not None:
+            self.error("invalid package: %s", pkg)
+            return await super()._handle()
+
+        return await super()._handle()
 
     async def stop(self):
         """ Stop everything """

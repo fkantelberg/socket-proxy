@@ -83,47 +83,53 @@ class TunnelClient(tunnel.Tunnel):
             client.write(pkg.data)
             await client.drain()
 
-    async def _serve(self):
-        """ Main loop which will listen on the tunnel for packages """
-        await super()._serve()
+    async def _handle(self):
+        # We need the next package and try to evaluate it
+        pkg = await self.tunnel.tun_read()
 
-        while True:
-            # We need the next package and try to evaluate it
-            pkg = await self.tunnel.tun_read()
+        # The tunnel was initialized
+        if isinstance(pkg, package.InitPackage):
+            self.tunnel.token = pkg.token
+            self.addresses = pkg.addresses
+            self.domain = pkg.domain
 
-            if isinstance(pkg, package.InitPackage):
-                # The tunnel was initialized
-                self.tunnel.token = pkg.token
-                self.addresses = pkg.addresses
-                self.domain = pkg.domain
+            # Output the public addresses
+            for ip_type, port in sorted(self.addresses):
+                self.info("open: %s on port %s", ip_type.name, port)
 
-                # Output the public addresses
-                for ip_type, port in sorted(self.addresses):
-                    self.info("open: %s on port %s", ip_type.name, port)
+            if self.protocol == base.ProtocolType.HTTP:
+                self.info("domain: %s", self.domain)
 
-                if self.protocol == base.ProtocolType.HTTP:
-                    self.info("domain: %s", self.domain)
+            # Send the configuration to the server for negotiation
+            await self._send_config()
+            return True
 
-                # Send the configuration to the server for negotiation
-                await self._send_config()
-            elif isinstance(pkg, package.ConfigPackage):
-                # Configuration comes back from the server we use that
-                self.config_from_package(pkg)
-            elif isinstance(pkg, package.ClientInitPackage):
-                # A new client connected on the other side of the tunnel
-                await self._connect_client(pkg)
-            elif isinstance(pkg, package.ClientClosePackage):
-                # A client disconnected from the other side of the tunnel
-                await self._disconnect_client(pkg.token)
-            elif isinstance(pkg, package.ClientDataPackage):
-                # Manage data coming through the tunnel
-                await self._send_data(pkg)
-            elif pkg is not None:
-                # Something unexpected happend
-                self.error("invalid package: %s", pkg)
-                break
-            else:
-                break
+        # Configuration comes back from the server we use that
+        if isinstance(pkg, package.ConfigPackage):
+            self.config_from_package(pkg)
+            return True
+
+        # A new client connected on the other side of the tunnel
+        if isinstance(pkg, package.ClientInitPackage):
+            await self._connect_client(pkg)
+            return True
+
+        # A client disconnected from the other side of the tunnel
+        if isinstance(pkg, package.ClientClosePackage):
+            await self._disconnect_client(pkg.token)
+            return True
+
+        # Manage data coming through the tunnel
+        if isinstance(pkg, package.ClientDataPackage):
+            await self._send_data(pkg)
+            return True
+
+        # Something unexpected happened
+        if pkg is not None:
+            self.error("invalid package: %s", pkg)
+            return await super()._handle()
+
+        return await super()._handle()
 
     async def loop(self):
         """ Main client loop of the client side of the tunnel """

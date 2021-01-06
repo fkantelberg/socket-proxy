@@ -34,12 +34,9 @@ class Connection:
         if len(token) != base.CLIENT_NAME_SIZE:
             raise base.InvalidPackage()
 
-        chunk_size = package.ClientDataPackage.MAX_SIZE
-        for i in range(0, len(data), chunk_size):
-            chunk = data[i:][:chunk_size]
-            pkg = package.ClientDataPackage(chunk, token)
-            self.write(pkg.to_bytes())
-            await self.drain()
+        pkg = package.ClientDataPackage(data, token)
+        self.write(pkg.to_bytes())
+        await self.drain()
 
     async def close(self):
         try:

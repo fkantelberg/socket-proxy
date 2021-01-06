@@ -87,7 +87,7 @@ class Package(metaclass=MetaPackage):
             (ptype,) = await cls.HEADER.read(reader)
 
             if ptype not in _package_registry:
-                raise base.InvalidPackageType()
+                raise base.InvalidPackageType(str(ptype))
 
             pcls = _package_registry[ptype]
             return pcls(*await pcls.recv(reader))
@@ -307,5 +307,5 @@ class ClientDataPackage(ClientPackage):
         if length > cls.MAX_SIZE:
             raise base.InvalidPackage()
 
-        data = await reader.read(length)
+        data = await reader.readexactly(length)
         return (data,) + res

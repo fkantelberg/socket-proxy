@@ -63,7 +63,6 @@ class ProxyServer:
         headers = {}
         while not reader.at_eof():
             line = await reader.readline()
-            _logger.info("%s", line)
             buf += line
 
             stripped = line.strip()
@@ -85,7 +84,6 @@ class ProxyServer:
 
         # Find the right tunnel for the host
         tun_uuid = match.groups()[0].decode()
-        _logger.error("%s: %s", tun_uuid, self.tunnels)
         if tun_uuid not in self.tunnels:
             writer.write(b"%s 404 Not Found\r\n\r\n" % version)
             await writer.drain()

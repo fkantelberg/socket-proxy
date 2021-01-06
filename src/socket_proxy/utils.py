@@ -31,6 +31,20 @@ def configure_logging(log_file, level):
     log.addHandler(handler)
 
 
+def format_transfer(b):
+    """ Format a number of bytes in a more human readable format """
+    symbols = [("T", 1 << 40), ("G", 1 << 30), ("M", 1 << 20), ("K", 1 << 10)]
+
+    if b < 0:
+        raise ValueError("Must be bigger than 0")
+
+    for symbol, size in symbols:
+        if b >= size:
+            return f"{b / size:.1f} {symbol}"
+
+    return str(b)
+
+
 def generate_token():
     """ Generate a random token used for identification of clients and tunnels """
     return secrets.token_bytes(base.CLIENT_NAME_SIZE)

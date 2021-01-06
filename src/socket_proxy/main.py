@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 import argparse
 import logging
+import os
 import sys
 
 from .base import DEFAULT_HTTP_PORT, DEFAULT_LOG_LEVEL, DEFAULT_PORT, LOG_LEVELS
 from .config import OptionType, config
 from .proxy import ProxyServer
 from .tunnel_client import TunnelClient
+from .tunnel_gui import GUIClient
 from .utils import configure_logging
 
 _logger = logging.getLogger(__name__)
@@ -198,6 +200,13 @@ def option_group(parser, server: bool):
             type=OptionType["ports"],
             help="Range of ports to use for the sockets.",
         )
+    else:
+        group.add_argument(
+            "--no-curses",
+            default="TERM" not in os.environ,
+            action="store_true",
+            help="Disable curses GUI",
+        )
 
 
 def parse_args(args=None):
@@ -233,13 +242,15 @@ def parse_args(args=None):
     return parser.parse_args(args)
 
 
-def run_client():
+def run_client(no_curses):
     for arg in ["ca", "connect", "dst"]:
         if not config.get(arg, False):
             _logger.critical("Missing --%s argument", arg)
             sys.exit(1)
 
-    cli = TunnelClient(
+    cls = TunnelClient if no_curses else GUIClient
+
+    cli = cls(
         *config["connect"],
         *config["dst"],
         ca=config["ca"],
@@ -285,7 +296,7 @@ def main(args=None):
         if args.mode == "server":
             run_server()
         elif args.mode == "client":
-            run_client()
+            run_client(args.no_curses)
     except KeyboardInterrupt:
         _logger.info("Shutting down")
 

@@ -43,6 +43,16 @@ def test_protocol_from_string():
         base.ProtocolType.from_str("tcpa")
 
 
+def test_format_transfer():
+    with pytest.raises(ValueError):
+        utils.format_transfer(-1)
+
+    assert utils.format_transfer(1), "1"
+    assert utils.format_transfer(1 << 10), "1.0 K"
+    assert utils.format_transfer(2048), "2.0 K"
+    assert utils.format_transfer(4 << 40), "4 T"
+
+
 def test_config():
     with NamedTemporaryFile() as fp:
         fp.write(b"[server]\nban-time=15\nports=7000:9000\n[client]\nban-time=20\n")

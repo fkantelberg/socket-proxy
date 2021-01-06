@@ -365,8 +365,11 @@ async def test_tunnel_client():
     # Invalid package on the tunnel
     client.tunnel.tun_read = mock.AsyncMock()
     client.tunnel.tun_read.return_value = None
-    await client._serve()
+    assert await client._handle() is False
     assert client.tunnel.tun_read.call_count
+
+    client.tunnel.tun_read.return_value = package.Package()
+    assert await client._handle() is False
 
 
 @pytest.mark.asyncio
@@ -435,5 +438,8 @@ async def test_tunnel_server():
     server.ports = (5000, 4000)
     server.server = None
     server.tunnel.tun_read.return_value = package.ConnectPackage(base.ProtocolType.TCP)
-    await server._serve()
-    assert server.server is None
+    assert await server._handle() is False
+
+    # Test an invalid package
+    server.tunnel.tun_read.return_value = package.Package()
+    assert await server._handle() is False

@@ -77,11 +77,11 @@ class Tunnel:
 
         # Just output the current configuration
         networks = self.networks if self.networks else ["0.0.0.0/0", "::/0"]
-        self.info("Allowed networks: %s", ", ".join(map(str, networks)))
-        self.info("ban time: %s", self.bantime or "off")
-        self.info("clients: %s", self.max_clients or "-")
-        self.info("idle timeout: %s", self.idle_timeout or "off")
-        self.info("connections per IP: %s", self.max_connects or "-")
+        self.info(f"Allowed networks: {', '.join(map(str, networks))}")
+        self.info(f"ban time: {self.bantime or 'off'}")
+        self.info(f"clients: {self.max_clients or '-'}")
+        self.info(f"idle timeout: {self.idle_timeout or 'off'}")
+        self.info(f"connections per IP: {self.max_connects or '-'}")
 
     async def _disconnect_client(self, token):
         """ Disconnect a client """
@@ -105,9 +105,16 @@ class Tunnel:
         if self.tunnel:
             await self.tunnel.close()
 
+    async def _handle(self):
+        """ Basic handler of the tunnel. Return False to leave the main loop """
+        return False
+
     async def _serve(self):
         """ Main tunnel loop """
         asyncio.create_task(self._interval())
+
+        while await self._handle():
+            pass
 
     async def _send_config(self):
         """ Send the current configuration as a package through the tunnel """
