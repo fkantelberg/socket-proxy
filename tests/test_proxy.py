@@ -426,21 +426,35 @@ async def test_tunnel_server():
     tun = mock.AsyncMock()
     server.tunnel.tun_read = tun
 
+    # Send a client data package with invalid token
+    tun.return_value = package.ClientDataPackage(b"abc", b"\xff")
+    assert await server._handle() is False
+
+    # Test if the filtering of protocols works
+    server.protocols = [base.ProtocolType.TCP]
+    tun.return_value = package.ConnectPackage(base.ProtocolType.TCP)
+    assert await server._handle() is True
+
+    server.protocols = []
+    tun.return_value = package.ConnectPackage(base.ProtocolType.TCP)
+    assert await server._handle() is False
+
+    server.protocols = [base.ProtocolType.HTTP]
+    tun.return_value = package.ConnectPackage(base.ProtocolType.HTTP)
+    assert await server._handle() is True
+
+    # Test an invalid package
+    tun.return_value = package.Package()
+    assert await server._handle() is False
+
     # Send a valid client data package
     tun.return_value = package.ClientDataPackage(b"abc", token)
     with pytest.raises(AssertionError):
         await server._serve()
 
-    # Send a client data package with invalid token
-    tun.return_value = package.ClientDataPackage(b"abc", b"\xff")
-    await server._serve()
-
     # Test a blocked port with impossible range
     server.ports = (5000, 4000)
     server.server = None
-    server.tunnel.tun_read.return_value = package.ConnectPackage(base.ProtocolType.TCP)
-    assert await server._handle() is False
-
-    # Test an invalid package
-    server.tunnel.tun_read.return_value = package.Package()
+    server.protocols = [base.ProtocolType.TCP]
+    tun.return_value = package.ConnectPackage(base.ProtocolType.TCP)
     assert await server._handle() is False

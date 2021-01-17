@@ -48,11 +48,11 @@ OptionType = {
     "max-connects": int,
     "max-tunnels": int,
     "networks": utils.parse_networks,
-    "no-tcp": to_bool,
     "no-verify-hostname": to_bool,
     "ports": utils.valid_ports,
     "protocol": base.ProtocolType.from_str,
     "tunnel-host": str,
+    **{f"no-{protocol.name.lower()}": to_bool for protocol in base.ProtocolType},
 }
 
 
@@ -73,11 +73,13 @@ class Configuration:
 
     @property
     def protocols(self):
-        result = []
-        if not self.get("no-tcp"):
-            result.append(base.ProtocolType.TCP)
-        if self.get("http_domain"):
-            result.append(base.ProtocolType.HTTP)
+        result = set()
+        for protocol in base.ProtocolType:
+            if not self.get(f"no-{protocol.name.lower()}"):
+                result.add(protocol)
+
+        if not self.get("http-domain"):
+            result.discard(base.ProtocolType.HTTP)
         return result
 
     def get(self, key, default=None):

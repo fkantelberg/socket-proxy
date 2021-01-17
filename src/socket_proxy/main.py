@@ -4,7 +4,13 @@ import logging
 import os
 import sys
 
-from .base import DEFAULT_HTTP_PORT, DEFAULT_LOG_LEVEL, DEFAULT_PORT, LOG_LEVELS
+from .base import (
+    DEFAULT_HTTP_PORT,
+    DEFAULT_LOG_LEVEL,
+    DEFAULT_PORT,
+    LOG_LEVELS,
+    ProtocolType,
+)
 from .config import OptionType, config
 from .proxy import ProxyServer
 from .tunnel_client import TunnelClient
@@ -99,12 +105,14 @@ def connection_group(parser, server: bool):
             f"port is not given the server will listen on port "
             f"{DEFAULT_HTTP_PORT}.",
         )
-        group.add_argument(
-            "--no-tcp",
-            default=False,
-            action="store_true",
-            help="Disable the ability to forward TCP ports",
-        )
+
+        for protocol in ProtocolType:
+            group.add_argument(
+                f"--no-{protocol.name.lower()}",
+                default=False,
+                action="store_true",
+                help=f"Disable the ability to forward {protocol.name} ports",
+            )
     else:
         group.add_argument(
             "-c",
