@@ -74,17 +74,19 @@ def test_config():
         config.load_arguments(args)
         assert config["ban-time"] == 45
 
-        config["no-tcp"] = 0
-        config["no-http"] = 0
-        config["http-domain"] = "example.org"
-        assert config.protocols == {base.ProtocolType.TCP, base.ProtocolType.HTTP}
-        config["no-tcp"] = 1
-        assert config.protocols == {base.ProtocolType.HTTP}
-        config["no-http"] = 1
-        assert config.protocols == set()
-        config["no-http"] = 0
-        config["http-domain"] = None
-        assert config.protocols == set()
+
+def test_config_protocols():
+    config["no-tcp"] = 0
+    config["no-http"] = 0
+    config["http-domain"] = "example.org"
+    assert config.protocols == {base.ProtocolType.TCP, base.ProtocolType.HTTP}
+    config["no-tcp"] = 1
+    assert config.protocols == {base.ProtocolType.HTTP}
+    config["no-http"] = 1
+    assert config.protocols == set()
+    config["no-http"] = 0
+    config["http-domain"] = None
+    assert config.protocols == set()
 
 
 def test_configure_logging():
