@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from typing import Any, List
 
 from . import base, package, tunnel, utils
 from .connection import Connection
@@ -12,14 +13,14 @@ class TunnelClient(tunnel.Tunnel):
 
     def __init__(
         self,
-        host,
-        port,
-        dst_host,
-        dst_port,
-        ca,
-        cert=None,
-        key=None,
-        verify_hostname=True,
+        host: str,
+        port: int,
+        dst_host: str,
+        dst_port: int,
+        ca: str,
+        cert: str = None,
+        key: str = None,
+        verify_hostname: bool = True,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -32,13 +33,13 @@ class TunnelClient(tunnel.Tunnel):
             cert=cert, key=key, ca=ca, check_hostname=verify_hostname,
         )
 
-    def info(self, msg, *args):
+    def info(self, msg: str, *args) -> None:
         _logger.info(msg.capitalize(), *args)
 
-    def error(self, msg, *args):
+    def error(self, msg: str, *args) -> None:
         _logger.error(msg.capitalize(), *args)
 
-    async def _client_loop(self, client):
+    async def _client_loop(self, client: Connection) -> None:
         """ This is the main client loop """
         _logger.info("Client %s connected", client.token.hex())
         while True:
@@ -59,7 +60,7 @@ class TunnelClient(tunnel.Tunnel):
             except Exception:
                 pass
 
-    async def _connect_client(self, pkg):
+    async def _connect_client(self, pkg: package.Package) -> None:
         """ Handles the connection of a new client through the tunnel """
         if pkg.token in self:
             return
@@ -76,14 +77,14 @@ class TunnelClient(tunnel.Tunnel):
             pkg = package.ClientClosePackage(pkg.token)
             await self.tunnel.tun_write(pkg)
 
-    async def _send_data(self, pkg):
+    async def _send_data(self, pkg: package.Package) -> None:
         """ Send data through the tunnel to the server side of the tunnel """
         client = self.get(pkg.token)
         if client:
             client.write(pkg.data)
             await client.drain()
 
-    async def _handle(self):
+    async def _handle(self) -> bool:
         # We need the next package and try to evaluate it
         pkg = await self.tunnel.tun_read()
 
@@ -131,7 +132,7 @@ class TunnelClient(tunnel.Tunnel):
 
         return await super()._handle()
 
-    async def loop(self):
+    async def loop(self) -> None:
         """ Main client loop of the client side of the tunnel """
         self.tunnel = await Connection.connect(self.host, self.port, ssl=self.sc)
         _logger.info("Tunnel %s:%s connected", self.host, self.port)
@@ -148,7 +149,7 @@ class TunnelClient(tunnel.Tunnel):
             await self.stop()
             _logger.info("Tunnel %s:%s closed", self.host, self.port)
 
-    def start(self):
+    def start(self) -> None:
         """ Start the client and the event loop """
         _logger.info("Starting client...")
         asyncio.run(self.loop())

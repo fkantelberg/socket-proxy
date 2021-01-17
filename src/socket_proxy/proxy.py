@@ -1,6 +1,8 @@
 import asyncio
 import logging
 import re
+from asyncio import StreamReader, StreamWriter
+from typing import List, Union
 
 from . import base, utils
 from .config import config
@@ -16,7 +18,14 @@ class ProxyServer:
         If clients connect the server will start a TunnelServer """
 
     def __init__(
-        self, host, port, cert, key, ca=None, http_domain=None, **kwargs,
+        self,
+        host: Union[str, List[str]],
+        port: int,
+        cert: str,
+        key: str,
+        ca: str = None,
+        http_domain: str = None,
+        **kwargs,
     ):
         self.kwargs = kwargs
         self.host, self.port = host, port
@@ -33,7 +42,7 @@ class ProxyServer:
         else:
             self.http_domain = self.http_domain_regex = False
 
-    async def _accept(self, reader, writer):
+    async def _accept(self, reader: StreamReader, writer: StreamWriter) -> None:
         """ Accept new tunnels and start to listen for clients """
 
         # Limit the number of tunnels
@@ -48,7 +57,7 @@ class ProxyServer:
         finally:
             self.tunnels.pop(tunnel.uuid)
 
-    async def _request(self, reader, writer):
+    async def _request(self, reader: StreamReader, writer: StreamWriter) -> None:
         """ Handle http requests and try to proxy them to the specific tunnel """
         buf = await reader.readline()
         status = buf.strip()
@@ -99,7 +108,7 @@ class ProxyServer:
             await writer.drain()
             await self.close(reader, writer)
 
-    async def http_loop(self):
+    async def http_loop(self) -> None:
         """ Main server loop for the http socket """
         host = self.http_host
         for h in host if isinstance(host, list) else [host]:
@@ -112,7 +121,7 @@ class ProxyServer:
         async with self.http_proxy:
             await self.http_proxy.serve_forever()
 
-    async def loop(self):
+    async def loop(self) -> None:
         """ Main server loop to wait for tunnels to open """
         if self.http_domain_regex:
             asyncio.create_task(self.http_loop())
@@ -127,12 +136,12 @@ class ProxyServer:
         async with self.server:
             await self.server.serve_forever()
 
-    def start(self):
+    def start(self) -> None:
         """ Start the server and event loop """
         _logger.info("Starting server...")
         asyncio.run(self.loop())
 
-    async def stop(self):
+    async def stop(self) -> None:
         """ Stop the server and event loop """
         for tunnel in self.tunnels.values():
             await tunnel.stop()
@@ -140,7 +149,7 @@ class ProxyServer:
         self.server.close()
         await self.server.wait_closed()
 
-    async def close(self, reader, writer):
+    async def close(self, reader: StreamReader, writer: StreamWriter) -> None:
         """ Close a StreamReader and StreamWriter """
         reader.feed_eof()
         writer.close()

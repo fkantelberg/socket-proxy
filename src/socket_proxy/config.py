@@ -1,9 +1,11 @@
+from argparse import Namespace
 from configparser import ConfigParser
+from typing import Any, Tuple
 
 from . import base, utils
 
 
-def to_bool(x):
+def to_bool(x: str) -> bool:
     return x.lower() in ["1", "on", "true", "t"]
 
 
@@ -62,17 +64,17 @@ class Configuration:
     def __init__(self):
         self.config = OptionDefault.copy()
 
-    def __contains__(self, key):
+    def __contains__(self, key: Any) -> bool:
         return key in self.config
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: Any) -> Any:
         return self.config[key]
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: Any, value: Any) -> None:
         self.config[key] = value
 
     @property
-    def protocols(self):
+    def protocols(self) -> Tuple[base.ProtocolType]:
         result = set()
         for protocol in base.ProtocolType:
             if not self.get(f"no-{protocol.name.lower()}"):
@@ -82,10 +84,10 @@ class Configuration:
             result.discard(base.ProtocolType.HTTP)
         return result
 
-    def get(self, key, default=None):
+    def get(self, key: Any, default: Any = None) -> Any:
         return self.config.get(key, default)
 
-    def load(self, section, filename):
+    def load(self, section: str, filename: str) -> bool:
         cfg = ConfigParser()
         cfg.read(filename)
 
@@ -97,7 +99,7 @@ class Configuration:
 
         return True
 
-    def load_arguments(self, args):
+    def load_arguments(self, args: Namespace) -> None:
         for opt in OptionType:
             arg = opt.replace("-", "_")
             val = getattr(args, arg, None)

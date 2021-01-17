@@ -3,6 +3,7 @@ import argparse
 import logging
 import os
 import sys
+from typing import Tuple
 
 from .base import (
     DEFAULT_HTTP_PORT,
@@ -21,7 +22,7 @@ _logger = logging.getLogger(__name__)
 
 
 class CustomHelpFormatter(argparse.HelpFormatter):
-    def _format_action_invocation(self, action):
+    def _format_action_invocation(self, action: argparse.Action) -> str:
         if not action.option_strings or action.nargs == 0:
             return super()._format_action_invocation(action)
 
@@ -30,14 +31,14 @@ class CustomHelpFormatter(argparse.HelpFormatter):
         return f"{'/'.join(action.option_strings)} {args_string}"
 
 
-def basic_group(parser):
+def basic_group(parser: argparse.ArgumentParser) -> None:
     group = parser.add_argument_group("Security")
     group.add_argument(
         "--config", help="Load everything from a configuration file",
     )
 
 
-def security_group(parser, server: bool):
+def security_group(parser: argparse.ArgumentParser, server: bool) -> None:
     group = parser.add_argument_group("Security")
 
     text_ca = ["CA certificate to use."]
@@ -74,7 +75,7 @@ def security_group(parser, server: bool):
         )
 
 
-def connection_group(parser, server: bool):
+def connection_group(parser: argparse.ArgumentParser, server: bool) -> None:
     group = parser.add_argument_group("Connection")
     if server:
         group.add_argument(
@@ -139,7 +140,7 @@ def connection_group(parser, server: bool):
         )
 
 
-def logging_group(parser):
+def logging_group(parser: argparse.ArgumentParser) -> None:
     group = parser.add_argument_group("Logging")
     group.add_argument(
         "--log-file",
@@ -153,7 +154,7 @@ def logging_group(parser):
     )
 
 
-def option_group(parser, server: bool):
+def option_group(parser: argparse.ArgumentParser, server: bool) -> None:
     group = parser.add_argument_group(
         "Additional options",
         "If the tunnel server and client set the options the minimal value will be used.",
@@ -223,7 +224,7 @@ def option_group(parser, server: bool):
         )
 
 
-def parse_args(args=None):
+def parse_args(args: Tuple[str] = None) -> None:
     parser = argparse.ArgumentParser(
         formatter_class=CustomHelpFormatter, prog="", description="",
     )
@@ -256,7 +257,7 @@ def parse_args(args=None):
     return parser.parse_args(args)
 
 
-def run_client(no_curses):
+def run_client(no_curses: bool) -> None:
     for arg in ["ca", "connect", "dst"]:
         if not config.get(arg, False):
             _logger.critical("Missing --%s argument", arg)
@@ -277,7 +278,7 @@ def run_client(no_curses):
     cli.start()
 
 
-def run_server():
+def run_server() -> None:
     for arg in ["cert", "key"]:
         if not config.get(arg, False):
             _logger.critical("Missing --%s argument", arg)
@@ -296,7 +297,7 @@ def run_server():
     server.start()
 
 
-def main(args=None):
+def main(args: Tuple[str] = None) -> None:
     args = parse_args(args)
 
     if args.config:

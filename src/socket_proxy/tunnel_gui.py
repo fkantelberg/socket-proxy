@@ -2,6 +2,7 @@ import curses
 import logging
 import queue
 from logging.handlers import QueueHandler
+from typing import List
 
 from .base import LOG_FORMAT
 from .tunnel_client import TunnelClient
@@ -17,25 +18,25 @@ class GUIClient(TunnelClient):
         self.logs = []
         self.configure_logging()
 
-    def configure_logging(self):
+    def configure_logging(self) -> None:
         """ Reconfigure the logging to catch the messages for the GUI """
         self.log_queue = queue.Queue()
         self.log_handler = QueueHandler(self.log_queue)
         self.log_handler.setFormatter(logging.Formatter(LOG_FORMAT, style="{"))
         logging.getLogger().handlers = [self.log_handler]
 
-    def get_dimension(self):
+    def get_dimension(self) -> None:
         """ Get the dimensions of the current window """
         self.height, self.width = self.scr.getmaxyx()
 
-    def _draw(self):
+    def _draw(self) -> None:
         """ Draw all GUI elements """
         self.scr.clear()
         self._draw_config()
         self._draw_info()
         self._draw_log()
 
-    def _draw_info(self):
+    def _draw_info(self) -> curses.window:
         """ Draw a box with main information about the current status """
         win = self.scr.subwin(self.options, self.width // 2, 0, 0)
         win.box()
@@ -61,7 +62,7 @@ class GUIClient(TunnelClient):
         win.refresh()
         return win
 
-    def _draw_config(self):
+    def _draw_config(self) -> curses.window:
         """ Draw a box with the current tunnel configuration """
         mx, my = self.width // 2, self.options
         win = self.scr.subwin(my, self.width - mx, 0, mx)
@@ -84,7 +85,7 @@ class GUIClient(TunnelClient):
         win.refresh()
         return win
 
-    def _draw_log(self):
+    def _draw_log(self) -> curses.window:
         """ Draw a box with the latest logs """
         h = self.height - self.options - 4
         w = self.width - 4
@@ -104,19 +105,19 @@ class GUIClient(TunnelClient):
         win.refresh()
         return win
 
-    def _draw_lines(self, win, lines):
+    def _draw_lines(self, win: curses.window, lines: List[str]) -> None:
         """ Draw multiple lines in a window with some border """
         h, w = [k - 4 for k in win.getmaxyx()]
         for y, line in enumerate(lines[:h]):
             win.addstr(y + 2, 2, line[:w])
 
-    async def _handle(self):
+    async def _handle(self) -> bool:
         """ Handle the drawing after each package """
         self.get_dimension()
         self._draw()
         return await super()._handle()
 
-    def _gui(self, scr):
+    def _gui(self, scr: curses.window) -> None:
         """ Configure the main screen """
         self.scr = scr
         curses.noecho()
@@ -124,5 +125,5 @@ class GUIClient(TunnelClient):
 
         super().start()
 
-    def start(self):
+    def start(self) -> None:
         curses.wrapper(self._gui)

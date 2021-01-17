@@ -9,6 +9,7 @@ import socket
 import ssl
 import sys
 from random import shuffle
+from typing import List, Tuple, Union
 from urllib.parse import urlsplit
 
 from . import base
@@ -16,7 +17,7 @@ from . import base
 _logger = logging.getLogger(__name__)
 
 
-def configure_logging(log_file, level):
+def configure_logging(log_file: str, level: str) -> None:
     """ Configure the logging """
     level = base.LOG_LEVELS.get(level.lower(), logging.DEBUG)
 
@@ -31,7 +32,7 @@ def configure_logging(log_file, level):
     log.addHandler(handler)
 
 
-def format_transfer(b):
+def format_transfer(b: int) -> str:
     """ Format a number of bytes in a more human readable format """
     symbols = [("T", 1 << 40), ("G", 1 << 30), ("M", 1 << 20), ("K", 1 << 10)]
 
@@ -45,14 +46,20 @@ def format_transfer(b):
     return str(b)
 
 
-def generate_token():
+def generate_token() -> bytes:
     """ Generate a random token used for identification of clients and tunnels """
     return secrets.token_bytes(base.CLIENT_NAME_SIZE)
 
 
 def generate_ssl_context(
-    *, cert=None, key=None, ca=None, server=False, ciphers=None, check_hostname=False,
-):
+    *,
+    cert: str = None,
+    key: str = None,
+    ca: str = None,
+    server: bool = False,
+    ciphers: List[str] = None,
+    check_hostname: bool = False,
+) -> ssl.SSLContext:
     """ Generate a SSL context for the tunnel """
 
     # Set the protocol and create the basic context
@@ -91,7 +98,7 @@ def generate_ssl_context(
     return ctx
 
 
-def get_unused_port(min_port, max_port, udp=False):
+def get_unused_port(min_port: int, max_port: int, udp: bool = False) -> int:
     """ Returns a random unused port within the given range or None if all are used """
     sock = socket.socket(type=socket.SOCK_DGRAM) if udp else socket.socket()
     ports = list(range(min_port, max_port + 1))
@@ -106,13 +113,13 @@ def get_unused_port(min_port, max_port, udp=False):
     return None
 
 
-def merge_settings(a, b):
+def merge_settings(a: int, b: int) -> int:
     """ Merge the settings of the tunnel. If one of them is 0 the other one will
         take place. otherwise the lower value will be used """
     return min(a, b) if a and b else max(a, b)
 
 
-def optimize_networks(*networks):
+def optimize_networks(*networks: List[base.IPvXNetwork]) -> List[base.IPvXNetwork]:
     """ Try to optimize the list of networks by using the minimal network
         configuration """
 
@@ -133,7 +140,9 @@ def optimize_networks(*networks):
     return sum([g for _, g in sorted(groups.items())], [])
 
 
-def parse_address(address, host=None, port=None, multiple=False):
+def parse_address(
+    address: str, host: str = None, port: int = None, multiple: bool = False
+) -> Tuple[Union[str, List[str]], int]:
     """ Parse an address and split hostname and port. The port is required. The
         default host is "" which means all """
 
@@ -187,7 +196,7 @@ def parse_address(address, host=None, port=None, multiple=False):
     raise argparse.ArgumentTypeError("Invalid address parsed. Host required.")
 
 
-def parse_networks(network):
+def parse_networks(network: str) -> List[base.IPvXNetwork]:
     """ Try to parse multiple networks and return them optimized """
     try:
         return optimize_networks(*map(ipaddress.ip_network, network.split(",")))
@@ -195,7 +204,7 @@ def parse_networks(network):
         raise argparse.ArgumentTypeError("Invalid network format")
 
 
-def valid_file(path):
+def valid_file(path: str) -> str:
     """ Check if a file exists and return the absolute path otherwise raise an
         error. This function is used for the argument parsing"""
     path = os.path.abspath(path)
@@ -204,7 +213,7 @@ def valid_file(path):
     return path
 
 
-def valid_ports(ports):
+def valid_ports(ports: Tuple[int, int]) -> Tuple[int, int]:
     """ Check if the argument is a valid port range with IP family """
     m = re.match(r"^(\d+):(\d+)?$", ports, re.IGNORECASE)
     if m:

@@ -2,7 +2,9 @@ import asyncio
 import collections
 import ipaddress
 import logging
+from asyncio import StreamReader, StreamWriter
 from datetime import datetime, timedelta
+from typing import List, Tuple
 
 from . import base, package, tunnel, utils
 from .config import config
@@ -16,13 +18,13 @@ class TunnelServer(tunnel.Tunnel):
 
     def __init__(
         self,
-        reader,
-        writer,
+        reader: StreamReader,
+        writer: StreamWriter,
         *,
-        domain="",
-        tunnel_host=None,
-        ports=None,
-        protocols=None,
+        domain: str = "",
+        tunnel_host: str = None,
+        ports: Tuple[int, int] = None,
+        protocols: List[base.ProtocolType] = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -35,7 +37,7 @@ class TunnelServer(tunnel.Tunnel):
         self.connections = collections.defaultdict(base.Ban)
         self.protocols = protocols or config.protocols
 
-    def block(self, ip):
+    def block(self, ip: base.IPvXAddress) -> bool:
         """ Decide whether the ip should be blocked """
         if 0 < self.max_connects <= self.connections[ip].hits:
             return True
@@ -45,7 +47,7 @@ class TunnelServer(tunnel.Tunnel):
 
         return False
 
-    async def idle(self):
+    async def idle(self) -> None:
         await super().idle()
 
         # Clear the connections
@@ -55,7 +57,9 @@ class TunnelServer(tunnel.Tunnel):
                 self.connections.pop(ip)
                 _logger.info("Connection number of %s resetted", ip)
 
-    async def _client_accept(self, reader, writer, read_ahead=None):
+    async def _client_accept(
+        self, reader: StreamReader, writer: StreamWriter, read_ahead: bytes = None,
+    ) -> None:
         """ Accept new clients and inform the tunnel about connections """
         host, port = writer.get_extra_info("peername")[:2]
         ip = ipaddress.ip_address(host)
@@ -100,7 +104,7 @@ class TunnelServer(tunnel.Tunnel):
 
         await self._disconnect_client(client.token)
 
-    async def _open_server(self):
+    async def _open_server(self) -> bool:
         """ Open the public server listener and start the main loop """
 
         # Start to listen on an external port
@@ -116,7 +120,7 @@ class TunnelServer(tunnel.Tunnel):
         asyncio.create_task(self._client_loop(self.server))
         return True
 
-    async def _client_loop(self, server):
+    async def _client_loop(self, server: asyncio.Server) -> None:
         """ Main client loop initializing the client and managing the transmission """
         addresses = [sock.getsockname()[:2] for sock in server.sockets]
 
@@ -132,7 +136,7 @@ class TunnelServer(tunnel.Tunnel):
         async with server:
             await server.serve_forever()
 
-    async def _handle(self):
+    async def _handle(self) -> bool:
         pkg = await self.tunnel.tun_read()
         # Start the server
         if isinstance(pkg, package.ConnectPackage):
@@ -182,7 +186,7 @@ class TunnelServer(tunnel.Tunnel):
 
         return await super()._handle()
 
-    async def stop(self):
+    async def stop(self) -> None:
         """ Stop everything """
         await super().stop()
 
@@ -192,7 +196,7 @@ class TunnelServer(tunnel.Tunnel):
 
         self.info("closed")
 
-    async def loop(self):
+    async def loop(self) -> None:
         """ Main loop of the proxy tunnel """
         self.info("connected %s:%s", self.host, self.port)
 

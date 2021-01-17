@@ -2,6 +2,7 @@ import enum
 import ipaddress
 import logging
 from datetime import datetime
+from typing import TypeVar, Union
 
 _logger = logging.getLogger(__name__)
 
@@ -20,6 +21,9 @@ LOG_LEVELS = {
     "warn": logging.WARN,
     "warning": logging.WARNING,
 }
+
+IPvXAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
+IPvXNetwork = Union[ipaddress.IPv4Network, ipaddress.IPv6Network]
 
 
 class InvalidPackage(Exception):
@@ -45,7 +49,7 @@ class InternetType(enum.IntEnum):
     IPv6 = 0x02
 
     @staticmethod
-    def from_ip(ip):
+    def from_ip(ip: Union[bytes, str]) -> TypeVar("InternetType"):
         if isinstance(ip, (bytes, str)):
             ip = ipaddress.ip_address(ip)
 
@@ -63,7 +67,7 @@ class ProtocolType(enum.IntEnum):
     HTTP = 0x02
 
     @staticmethod
-    def from_str(protocol):
+    def from_str(protocol: str) -> TypeVar("ProtocolType"):
         if protocol.upper() == "TCP":
             return ProtocolType.TCP
         if protocol.upper() == "HTTP":
