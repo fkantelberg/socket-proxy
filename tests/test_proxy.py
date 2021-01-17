@@ -35,6 +35,14 @@ proc = subprocess.Popen(["./certs.sh", "server"], stdin=subprocess.PIPE)
 proc.communicate(b"y\n" * 80)
 
 
+def raiseAssert(*args, **kwargs):
+    raise AssertionError()
+
+
+def raiseAssertAsync(*args, **kwargs):
+    raise AssertionError()
+
+
 def test_generate_ssl_context():
     server = utils.generate_ssl_context(
         cert=SERVER_CERT, key=SERVER_KEY, ca=CA_CERT, server=True,
@@ -332,9 +340,6 @@ async def test_tunnel_timeout():
 
 @pytest.mark.asyncio
 async def test_tunnel_client():
-    async def raiseAssert(*args, **kwargs):
-        raise AssertionError()
-
     cli = mock.AsyncMock()
     cli.token = b"\x00" * base.CLIENT_NAME_SIZE
     cli.read.return_value = None
@@ -360,7 +365,7 @@ async def test_tunnel_client():
     client.running = True
     cli.reader = asyncio.StreamReader()
     cli.read.return_value = b"abc"
-    client.tunnel.tun_write = client.tunnel.tun_data = raiseAssert
+    client.tunnel.tun_write = client.tunnel.tun_data = raiseAssertAsync
     await client._client_loop(cli)
 
     # Invalid package on the tunnel
@@ -373,11 +378,7 @@ async def test_tunnel_client():
     assert await client._handle() is False
 
 
-@pytest.mark.asyncio
-async def test_tunnel_server():
-    def raiseAssert(*args, **kwargs):
-        raise AssertionError()
-
+def init_test_server():
     reader = writer = mock.AsyncMock()
     reader.feed_eof = mock.MagicMock()
     writer.close = mock.MagicMock()
@@ -386,9 +387,14 @@ async def test_tunnel_server():
 
     config["max-connects"] = 1
     server = TunnelServer(reader, writer)
-
-    # Test connection bans
     server.add = raiseAssert
+    return server, reader, writer
+
+
+@pytest.mark.asyncio
+async def test_tunnel_server():
+    server, reader, writer = init_test_server()
+
     assert len(server.connections) == 0
     with pytest.raises(AssertionError):
         await server._client_accept(reader, writer)
@@ -418,18 +424,29 @@ async def test_tunnel_server():
     await server.idle()
     assert len(server.connections) == 0
 
-    # Test client data packages
+
+def init_test_server_tun():
+    server = init_test_server()[0]
     token = b"\x00" * base.CLIENT_NAME_SIZE
     m = server.clients[token] = mock.AsyncMock()
     m.write = raiseAssert
 
     tun = mock.AsyncMock()
     server.tunnel.tun_read = tun
+    return server, tun
 
+
+@pytest.mark.asyncio
+async def test_tunnel_server_invalid_token():
+    server, tun = init_test_server_tun()
     # Send a client data package with invalid token
     tun.return_value = package.ClientDataPackage(b"abc", b"\xff")
     assert await server._handle() is False
 
+
+@pytest.mark.asyncio
+async def test_tunnel_server_protocols():
+    server, tun = init_test_server_tun()
     # Test if the filtering of protocols works
     server.protocols = [base.ProtocolType.TCP]
     tun.return_value = package.ConnectPackage(base.ProtocolType.TCP)
@@ -443,15 +460,24 @@ async def test_tunnel_server():
     tun.return_value = package.ConnectPackage(base.ProtocolType.HTTP)
     assert await server._handle() is True
 
+
+@pytest.mark.asyncio
+async def test_tunnel_server_packages():
+    server, tun = init_test_server_tun()
     # Test an invalid package
     tun.return_value = package.Package()
     assert await server._handle() is False
 
     # Send a valid client data package
+    token = b"\x00" * base.CLIENT_NAME_SIZE
     tun.return_value = package.ClientDataPackage(b"abc", token)
     with pytest.raises(AssertionError):
         await server._serve()
 
+
+@pytest.mark.asyncio
+async def test_tunnel_server_blocked_port():
+    server, tun = init_test_server_tun()
     # Test a blocked port with impossible range
     server.ports = (5000, 4000)
     server.server = None
