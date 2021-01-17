@@ -120,7 +120,7 @@ class TunnelServer(tunnel.Tunnel):
         asyncio.create_task(self._client_loop(self.server))
         return True
 
-    async def _client_loop(self, server: asyncio.Server) -> None:
+    async def _client_loop(self, server: asyncio.base_events.Server) -> None:
         """ Main client loop initializing the client and managing the transmission """
         addresses = [sock.getsockname()[:2] for sock in server.sockets]
 
