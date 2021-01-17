@@ -222,6 +222,12 @@ def option_group(parser: argparse.ArgumentParser, server: bool) -> None:
             action="store_true",
             help="Disable curses GUI",
         )
+        group.add_argument(
+            "--store-information",
+            type=OptionType["store-information"],
+            help="Store the current connection information to a json file. This "
+            "is especially useful if used as a service.",
+        )
 
 
 def parse_args(args: Tuple[str] = None) -> None:

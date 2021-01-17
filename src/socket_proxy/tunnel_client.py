@@ -1,8 +1,9 @@
 import asyncio
+import json
 import logging
-from typing import Any, List
 
 from . import base, package, tunnel, utils
+from .config import config
 from .connection import Connection
 
 _logger = logging.getLogger(__name__)
@@ -84,6 +85,22 @@ class TunnelClient(tunnel.Tunnel):
             client.write(pkg.data)
             await client.drain()
 
+    def store_information(self) -> None:
+        fp = config.get("store-information")
+        if not fp:
+            return
+
+        json.dump(
+            {
+                "protocol": self.protocol.name,
+                "dest": [self.dst_host, self.dst_port],
+                "host": self.host,
+                "ports": [[ip_type.name, port] for ip_type, port in self.addresses],
+                "domain": self.domain,
+            },
+            fp,
+        )
+
     async def _handle(self) -> bool:
         # We need the next package and try to evaluate it
         pkg = await self.tunnel.tun_read()
@@ -100,6 +117,9 @@ class TunnelClient(tunnel.Tunnel):
 
             if self.protocol == base.ProtocolType.HTTP:
                 self.info("domain: %s", self.domain)
+
+            # Store information into a file
+            self.store_information()
 
             # Send the configuration to the server for negotiation
             await self._send_config()

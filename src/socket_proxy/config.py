@@ -1,6 +1,6 @@
-from argparse import Namespace
+from argparse import FileType, Namespace
 from configparser import ConfigParser
-from typing import Any, Tuple
+from typing import Any, Set
 
 from . import base, utils
 
@@ -25,6 +25,7 @@ OptionDefault = {
     "ports": None,
     "protocol": base.ProtocolType.TCP,
     "protocols": [base.ProtocolType.TCP],
+    "store-information": None,
     "tunnel-host": None,
 }
 
@@ -53,6 +54,7 @@ OptionType = {
     "no-verify-hostname": to_bool,
     "ports": utils.valid_ports,
     "protocol": base.ProtocolType.from_str,
+    "store-information": FileType("w+"),
     "tunnel-host": str,
     **{f"no-{protocol.name.lower()}": to_bool for protocol in base.ProtocolType},
 }
@@ -74,7 +76,7 @@ class Configuration:
         self.config[key] = value
 
     @property
-    def protocols(self) -> Tuple[base.ProtocolType]:
+    def protocols(self) -> Set[base.ProtocolType]:
         result = set()
         for protocol in base.ProtocolType:
             if not self.get(f"no-{protocol.name.lower()}"):

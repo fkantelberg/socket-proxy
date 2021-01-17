@@ -4,6 +4,7 @@ import ssl
 import subprocess
 import time
 from datetime import datetime
+from io import StringIO
 from unittest import mock
 
 import pytest
@@ -203,6 +204,13 @@ async def test_tunnel_with_dummy(echo_server, server, client):
         elif ip_type == base.InternetType.IPv6:
             assert await connect_and_send("::1", port, b"abc") == b"abc"
 
+    # Write information into a file
+    with StringIO() as fp:
+        config["store-information"] = fp
+        client.store_information()
+        assert fp.tell()
+        config["store-information"] = None
+
     # Close the echo server
     echo_server.close()
     await echo_server.wait_closed()
@@ -243,6 +251,7 @@ async def test_http_tunnel_with_dummy(echo_server, http_server, http_client):
     request = b"GET / HTTP/1.1\r\nHost: test.example.org\r\n\r\n"
     assert await connect_and_send(request) == b"HTTP/1.1 404 Not Found\r\n\r\n"
 
+    assert http_server.tunnels
     token = list(http_server.tunnels)[0]
     request = b"GET / HTTP/1.1\r\nHost: %s.example.org\r\n\r\n" % token.encode()
     assert await connect_and_send(request) == request
