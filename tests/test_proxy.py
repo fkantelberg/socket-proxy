@@ -110,6 +110,7 @@ async def http_server(event_loop):
         key=SERVER_KEY,
         ca=CA_CERT,
         http_domain="example.org",
+        protocols=[base.ProtocolType.HTTP],
     )
     Tunnel._interval = mock.AsyncMock()
     event_loop.create_task(server.loop())

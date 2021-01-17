@@ -5,6 +5,7 @@ import logging
 from datetime import datetime, timedelta
 
 from . import base, package, tunnel, utils
+from .config import config
 from .connection import Connection
 
 _logger = logging.getLogger(__name__)
@@ -14,7 +15,15 @@ class TunnelServer(tunnel.Tunnel):
     """ Server side of the tunnel to listen for external connections """
 
     def __init__(
-        self, reader, writer, *, domain="", tunnel_host=None, ports=None, **kwargs,
+        self,
+        reader,
+        writer,
+        *,
+        domain="",
+        tunnel_host=None,
+        ports=None,
+        protocols=None,
+        **kwargs,
     ):
         super().__init__(**kwargs)
         self.tunnel = Connection(reader, writer, token=utils.generate_token())
@@ -24,6 +33,7 @@ class TunnelServer(tunnel.Tunnel):
         self.ports = ports
         self.server = None
         self.connections = collections.defaultdict(base.Ban)
+        self.protocols = protocols or config.protocols
 
     def block(self, ip):
         """ Decide whether the ip should be blocked """
@@ -127,6 +137,10 @@ class TunnelServer(tunnel.Tunnel):
         # Start the server
         if isinstance(pkg, package.ConnectPackage):
             self.protocol = pkg.protocol
+            if self.protocol not in self.protocols:
+                self.error(f"disabled protocol {self.protocol.name}")
+                return False
+
             self.info("using protocol: %s", self.protocol.name)
 
             if self.protocol != base.ProtocolType.TCP:

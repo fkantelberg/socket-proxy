@@ -99,6 +99,12 @@ def connection_group(parser, server: bool):
             f"port is not given the server will listen on port "
             f"{DEFAULT_HTTP_PORT}.",
         )
+        group.add_argument(
+            "--no-tcp",
+            default=False,
+            action="store_true",
+            help="Disable the ability to forward TCP ports",
+        )
     else:
         group.add_argument(
             "-c",

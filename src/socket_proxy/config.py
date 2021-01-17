@@ -22,6 +22,7 @@ OptionDefault = {
     "no-verify-hostname": False,
     "ports": None,
     "protocol": base.ProtocolType.TCP,
+    "protocols": [base.ProtocolType.TCP],
     "tunnel-host": None,
 }
 
@@ -47,6 +48,7 @@ OptionType = {
     "max-connects": int,
     "max-tunnels": int,
     "networks": utils.parse_networks,
+    "no-tcp": to_bool,
     "no-verify-hostname": to_bool,
     "ports": utils.valid_ports,
     "protocol": base.ProtocolType.from_str,
@@ -68,6 +70,15 @@ class Configuration:
 
     def __setitem__(self, key, value):
         self.config[key] = value
+
+    @property
+    def protocols(self):
+        result = []
+        if not self.get("no-tcp"):
+            result.append(base.ProtocolType.TCP)
+        if self.get("http_domain"):
+            result.append(base.ProtocolType.HTTP)
+        return result
 
     def get(self, key, default=None):
         return self.config.get(key, default)
