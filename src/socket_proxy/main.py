@@ -317,7 +317,7 @@ def main(args: Tuple[str] = None) -> None:
         if args.mode == "server":
             run_server()
         elif args.mode == "client":
-            run_client(args.no_curses)
+            run_client(config.get("no-curses"))
     except KeyboardInterrupt:
         _logger.info("Shutting down")
 
