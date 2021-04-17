@@ -311,7 +311,7 @@ def main(args: Tuple[str] = None) -> None:
 
     config.load_arguments(args)
 
-    configure_logging(args.log_file, args.log_level)
+    configure_logging(config.get("log-file"), config.get("log-level"))
 
     try:
         if args.mode == "server":

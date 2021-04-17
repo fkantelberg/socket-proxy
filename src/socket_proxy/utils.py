@@ -23,13 +23,17 @@ def configure_logging(log_file: str, level: str) -> None:
 
     log = logging.getLogger()
     log.setLevel(level)
-    if log_file:
-        handler = logging.FileHandler(log_file)
-    else:
-        handler = logging.StreamHandler(sys.stdout)
+
+    handler = logging.StreamHandler(sys.stdout)
     handler.setLevel(logging.DEBUG)
     handler.setFormatter(logging.Formatter(base.LOG_FORMAT, style="{"))
     log.addHandler(handler)
+
+    if log_file:
+        handler = logging.FileHandler(log_file)
+        handler.setLevel(logging.DEBUG)
+        handler.setFormatter(logging.Formatter(base.LOG_FORMAT, style="{"))
+        log.addHandler(handler)
 
 
 def format_transfer(b: int) -> str:
