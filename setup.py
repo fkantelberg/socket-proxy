@@ -10,7 +10,7 @@ def read(fname):
 
 setup(
     name="socket-proxy",
-    version="1.7",
+    version="1.7.1",
     author="Florian Kantelberg",
     author_email="florian.kantelberg@mailbox.org",
     description="Proxy TCP ports of local systems",
