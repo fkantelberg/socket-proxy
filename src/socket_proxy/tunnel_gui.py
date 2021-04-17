@@ -36,7 +36,7 @@ class GUIClient(TunnelClient):
         self._draw_info()
         self._draw_log()
 
-    def _draw_info(self) -> curses.window:
+    def _draw_info(self):
         """ Draw a box with main information about the current status """
         win = self.scr.subwin(self.options, self.width // 2, 0, 0)
         win.box()
@@ -62,7 +62,7 @@ class GUIClient(TunnelClient):
         win.refresh()
         return win
 
-    def _draw_config(self) -> curses.window:
+    def _draw_config(self):
         """ Draw a box with the current tunnel configuration """
         mx, my = self.width // 2, self.options
         win = self.scr.subwin(my, self.width - mx, 0, mx)
@@ -85,7 +85,7 @@ class GUIClient(TunnelClient):
         win.refresh()
         return win
 
-    def _draw_log(self) -> curses.window:
+    def _draw_log(self):
         """ Draw a box with the latest logs """
         h = self.height - self.options - 4
         w = self.width - 4
@@ -105,7 +105,7 @@ class GUIClient(TunnelClient):
         win.refresh()
         return win
 
-    def _draw_lines(self, win: curses.window, lines: List[str]) -> None:
+    def _draw_lines(self, win, lines: List[str]) -> None:
         """ Draw multiple lines in a window with some border """
         h, w = [k - 4 for k in win.getmaxyx()]
         for y, line in enumerate(lines[:h]):
@@ -117,7 +117,7 @@ class GUIClient(TunnelClient):
         self._draw()
         return await super()._handle()
 
-    def _gui(self, scr: curses.window) -> None:
+    def _gui(self, scr) -> None:
         """ Configure the main screen """
         self.scr = scr
         curses.noecho()

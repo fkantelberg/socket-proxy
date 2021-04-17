@@ -1,3 +1,4 @@
+import os
 from argparse import FileType, Namespace
 from configparser import ConfigParser
 from typing import Any, Set
@@ -21,7 +22,7 @@ OptionDefault = {
     "max-connects": 0,
     "max-tunnels": 0,
     "networks": [],
-    "no-curses": False,
+    "no-curses": "TERM" in os.environ,
     "no-verify-hostname": False,
     "ports": None,
     "protocol": base.ProtocolType.TCP,
