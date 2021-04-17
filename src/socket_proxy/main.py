@@ -33,7 +33,7 @@ class CustomHelpFormatter(argparse.HelpFormatter):
 def basic_group(parser: argparse.ArgumentParser) -> None:
     group = parser.add_argument_group("Security")
     group.add_argument(
-        "--config", help="Load everything from a configuration file",
+        "--config", default=None, help="Load everything from a configuration file",
     )
 
 
