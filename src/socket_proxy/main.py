@@ -33,7 +33,9 @@ class CustomHelpFormatter(argparse.HelpFormatter):
 def basic_group(parser: argparse.ArgumentParser) -> None:
     group = parser.add_argument_group("Security")
     group.add_argument(
-        "--config", default=None, help="Load everything from a configuration file",
+        "--config",
+        default=None,
+        help="Load everything from a configuration file",
     )
 
 
@@ -52,17 +54,27 @@ def security_group(parser: argparse.ArgumentParser, server: bool) -> None:
         text_key.append(a)
 
     group.add_argument(
-        "--ca", metavar="FILE", type=OptionType["ca"], help=" ".join(text_ca),
+        "--ca",
+        metavar="FILE",
+        type=OptionType["ca"],
+        help=" ".join(text_ca),
     )
 
     group.add_argument(
-        "--cert", metavar="FILE", type=OptionType["cert"], help=" ".join(text_cert),
+        "--cert",
+        metavar="FILE",
+        type=OptionType["cert"],
+        help=" ".join(text_cert),
     )
     group.add_argument(
-        "--key", metavar="FILE", type=OptionType["key"], help=" ".join(text_key),
+        "--key",
+        metavar="FILE",
+        type=OptionType["key"],
+        help=" ".join(text_key),
     )
     group.add_argument(
-        "--cipher", help="Ciphers to use for the TLS connection.",
+        "--cipher",
+        help="Ciphers to use for the TLS connection.",
     )
 
     if not server:
@@ -222,6 +234,12 @@ def option_group(parser: argparse.ArgumentParser, server: bool) -> None:
             help="Disable curses GUI",
         )
         group.add_argument(
+            "--ping",
+            default=False,
+            action="store_true",
+            help="Enable a regular ping and disconnect if the answer takes too long",
+        )
+        group.add_argument(
             "--store-information",
             type=OptionType["store-information"],
             help="Store the current connection information to a json file. This "
@@ -231,7 +249,9 @@ def option_group(parser: argparse.ArgumentParser, server: bool) -> None:
 
 def parse_args(args: Tuple[str] = None) -> None:
     parser = argparse.ArgumentParser(
-        formatter_class=CustomHelpFormatter, prog="", description="",
+        formatter_class=CustomHelpFormatter,
+        prog="",
+        description="",
     )
     logging_group(parser)
 
@@ -279,6 +299,7 @@ def run_client(no_curses: bool) -> None:
         protocol=config["protocol"],
         verify_hostname=not config["no-verify-hostname"],
         networks=config["networks"],
+        ping_enabled=config["ping"],
     )
     cli.start()
 

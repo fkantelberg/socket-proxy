@@ -118,14 +118,14 @@ def get_unused_port(min_port: int, max_port: int, udp: bool = False) -> int:
 
 
 def merge_settings(a: int, b: int) -> int:
-    """ Merge the settings of the tunnel. If one of them is 0 the other one will
-        take place. otherwise the lower value will be used """
+    """Merge the settings of the tunnel. If one of them is 0 the other one will
+    take place. otherwise the lower value will be used"""
     return min(a, b) if a and b else max(a, b)
 
 
 def optimize_networks(*networks: List[base.IPvXNetwork]) -> List[base.IPvXNetwork]:
-    """ Try to optimize the list of networks by using the minimal network
-        configuration """
+    """Try to optimize the list of networks by using the minimal network
+    configuration"""
 
     grouped = itertools.groupby(networks, lambda n: n.version)
     groups = {}
@@ -147,8 +147,8 @@ def optimize_networks(*networks: List[base.IPvXNetwork]) -> List[base.IPvXNetwor
 def parse_address(
     address: str, host: str = None, port: int = None, multiple: bool = False
 ) -> Tuple[Union[str, List[str]], int]:
-    """ Parse an address and split hostname and port. The port is required. The
-        default host is "" which means all """
+    """Parse an address and split hostname and port. The port is required. The
+    default host is "" which means all"""
 
     # Only the address without scheme and path. We only support IPs if multiple hosts
     # are activated
@@ -209,8 +209,8 @@ def parse_networks(network: str) -> List[base.IPvXNetwork]:
 
 
 def valid_file(path: str) -> str:
-    """ Check if a file exists and return the absolute path otherwise raise an
-        error. This function is used for the argument parsing"""
+    """Check if a file exists and return the absolute path otherwise raise an
+    error. This function is used for the argument parsing"""
     path = os.path.abspath(path)
     if not os.path.isfile(path):
         raise argparse.ArgumentTypeError("Not a file.")

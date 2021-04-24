@@ -14,8 +14,8 @@ HTTPRequestStatus = re.compile(rb"^(\S+)\s+(\S+)\s+(\S+)$")
 
 
 class ProxyServer:
-    """ Main proxy server which creates a TLS socket and listens for clients.
-        If clients connect the server will start a TunnelServer """
+    """Main proxy server which creates a TLS socket and listens for clients.
+    If clients connect the server will start a TunnelServer"""
 
     def __init__(
         self,
@@ -115,7 +115,9 @@ class ProxyServer:
             _logger.info("Serving on %s:%s [HTTP]", h, self.http_port)
 
         self.http_proxy = await asyncio.start_server(
-            self._request, self.http_host, self.http_port,
+            self._request,
+            self.http_host,
+            self.http_port,
         )
 
         async with self.http_proxy:
@@ -127,7 +129,10 @@ class ProxyServer:
             asyncio.create_task(self.http_loop())
 
         self.server = await asyncio.start_server(
-            self._accept, self.host, self.port, ssl=self.sc,
+            self._accept,
+            self.host,
+            self.port,
+            ssl=self.sc,
         )
 
         for host in self.host if isinstance(self.host, list) else [self.host]:

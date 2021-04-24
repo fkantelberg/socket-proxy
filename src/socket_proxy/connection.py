@@ -32,7 +32,11 @@ class Connection:
 
     @classmethod
     async def connect(
-        cls, host: str, port: int, token: bytes = None, **kwargs,
+        cls,
+        host: str,
+        port: int,
+        token: bytes = None,
+        **kwargs,
     ) -> TypeVar("Connection"):
         streams = await asyncio.open_connection(host, port, **kwargs)
         return cls(*streams, token=token)

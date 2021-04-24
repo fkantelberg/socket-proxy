@@ -9,6 +9,7 @@ from unittest import mock
 
 import pytest
 import pytest_asyncio.plugin
+
 from socket_proxy import (
     Tunnel,
     TunnelClient,

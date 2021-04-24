@@ -5,6 +5,7 @@ from tempfile import NamedTemporaryFile
 from unittest import mock
 
 import pytest
+
 from socket_proxy import base, utils
 from socket_proxy.config import OptionDefault, config, to_bool
 
