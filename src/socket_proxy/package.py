@@ -25,8 +25,8 @@ class MetaPackage(type):
 
 
 class PackageStruct(struct.Struct):
-    """ Helper class to read exactly the size of the structure from the
-        StreamReader and unpacking it properly """
+    """Helper class to read exactly the size of the structure from the
+    StreamReader and unpacking it properly"""
 
     @classmethod
     def pack_network(cls, network: base.IPvXNetwork) -> bytes:
@@ -60,10 +60,10 @@ class PackageStruct(struct.Struct):
 
 
 class Package(metaclass=MetaPackage):
-    """ Base package which defines the package type. Building a package is done
-        by the unique package type and class inheritance.
+    """Base package which defines the package type. Building a package is done
+    by the unique package type and class inheritance.
 
-        Structure: <package type>
+    Structure: <package type>
     """
 
     _name = None
@@ -78,8 +78,8 @@ class Package(metaclass=MetaPackage):
 
     @classmethod
     async def recv(cls, reader: asyncio.StreamReader) -> Tuple[Any]:
-        """ Read the package from the reader and return a tuple. The tuple is
-            getting passed to the constructor """
+        """Read the package from the reader and return a tuple. The tuple is
+        getting passed to the constructor"""
         return ()
 
     @classmethod
@@ -98,9 +98,9 @@ class Package(metaclass=MetaPackage):
 
 
 class ConnectPackage(Package):
-    """ Package to configure/start the server site
+    """Package to configure/start the server site
 
-        Structure: <SUPER>
+    Structure: <SUPER>
     """
 
     _name = "connect"
@@ -123,12 +123,36 @@ class ConnectPackage(Package):
         return (base.ProtocolType(protocol),) + res
 
 
-class InitPackage(Package):
-    """ Package to initialize the tunnel which sends the external port. The number of
-        addresses is limitted to 255
+class PingPackage(Package):
+    """Package to for a regular ping to keep the connection active
 
-        Structure: <SUPER> <tunnel token> <number of ports>
-                   (<type of port> <external port>)* <length of domain> <domain>
+    Structure: <SUPER>
+    """
+
+    _name = "ping"
+    _type = 0x02
+
+    TIMESTAMP = PackageStruct("!d")
+
+    def __init__(self, timestamp, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.time = timestamp
+
+    def to_bytes(self) -> bytes:
+        return super().to_bytes() + self.TIMESTAMP.pack(self.time)
+
+    @classmethod
+    async def recv(cls, reader: asyncio.StreamReader) -> Tuple[Any]:
+        res = await super().recv(reader)
+        return await cls.TIMESTAMP.read(reader) + res
+
+
+class InitPackage(Package):
+    """Package to initialize the tunnel which sends the external port. The number of
+    addresses is limitted to 255
+
+    Structure: <SUPER> <tunnel token> <number of ports>
+               (<type of port> <external port>)* <length of domain> <domain>
     """
 
     _name = "init"
@@ -171,14 +195,14 @@ class InitPackage(Package):
 
 
 class ConfigPackage(Package):
-    """ Package to inform about configurations. This package will be send between
-        both sides of the tunnel to negotiate the configuration by using the minimum
-        from each side or the maximum if one of the configuration is 0
+    """Package to inform about configurations. This package will be send between
+    both sides of the tunnel to negotiate the configuration by using the minimum
+    from each side or the maximum if one of the configuration is 0
 
-        Structure: <SUPER> <connects>
+    Structure: <SUPER> <connects>
     """
 
-    _name = "client>config"
+    _name = "config"
     _type = 0x11
     __slots__ = ("bantime", "clients", "connects", "idle_timeout", "networks")
 
@@ -221,10 +245,10 @@ class ConfigPackage(Package):
 
 
 class ClientPackage(Package):
-    """ Basic client package which adds an unique token for the tunnel to determine
-        the specific clients
+    """Basic client package which adds an unique token for the tunnel to determine
+    the specific clients
 
-        Structure: <SUPER> <client token>
+    Structure: <SUPER> <client token>
     """
 
     _name = "client"
@@ -247,9 +271,9 @@ class ClientPackage(Package):
 
 
 class ClientInitPackage(ClientPackage):
-    """ Package to initialize a connecting client sending the client information
+    """Package to initialize a connecting client sending the client information
 
-        Structure: <SUPER> <ip type> <client port> <client ip>
+    Structure: <SUPER> <ip type> <client port> <client ip>
     """
 
     _name = "client>init"
@@ -280,9 +304,9 @@ class ClientInitPackage(ClientPackage):
 
 
 class ClientClosePackage(ClientPackage):
-    """ Package to inform the other side about a disconnected client
+    """Package to inform the other side about a disconnected client
 
-        Structure: <SUPER>
+    Structure: <SUPER>
     """
 
     _name = "client>close"
@@ -291,10 +315,10 @@ class ClientClosePackage(ClientPackage):
 
 
 class ClientDataPackage(ClientPackage):
-    """ Package to transmit data through the tunnel. This will produce quite some
-        overhead for many smaller packages
+    """Package to transmit data through the tunnel. This will produce quite some
+    overhead for many smaller packages
 
-        Structure: <SUPER> <data length> <data>
+    Structure: <SUPER> <data length> <data>
     """
 
     _name = "client>data"

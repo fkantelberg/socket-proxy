@@ -46,11 +46,18 @@ def raiseAssertAsync(*args, **kwargs):
 
 def test_generate_ssl_context():
     server = utils.generate_ssl_context(
-        cert=SERVER_CERT, key=SERVER_KEY, ca=CA_CERT, server=True,
+        cert=SERVER_CERT,
+        key=SERVER_KEY,
+        ca=CA_CERT,
+        server=True,
     )
 
     client = utils.generate_ssl_context(
-        cert=CLIENT_CERT, key=CLIENT_KEY, ca=CA_CERT, server=False, ciphers="RSA",
+        cert=CLIENT_CERT,
+        key=CLIENT_KEY,
+        ca=CA_CERT,
+        server=False,
+        ciphers="RSA",
     )
 
     assert all(isinstance(ctx, ssl.SSLContext) for ctx in (client, server))
@@ -81,7 +88,11 @@ async def echo_server(event_loop):
 @pytest.fixture
 async def server(event_loop):
     server = proxy.ProxyServer(
-        host="", port=TCP_PORT, cert=SERVER_CERT, key=SERVER_KEY, ca=CA_CERT,
+        host="",
+        port=TCP_PORT,
+        cert=SERVER_CERT,
+        key=SERVER_KEY,
+        ca=CA_CERT,
     )
     Tunnel._interval = mock.AsyncMock()
     event_loop.create_task(server.loop())
@@ -231,7 +242,8 @@ async def test_tunnel_with_dummy(echo_server, server, client):
 async def test_http_tunnel_with_dummy(echo_server, http_server, http_client):
     async def connect_and_send(text):
         reader, writer = await asyncio.open_connection(
-            "127.0.0.1", base.DEFAULT_HTTP_PORT,
+            "127.0.0.1",
+            base.DEFAULT_HTTP_PORT,
         )
         writer.write(text)
         await writer.drain()
@@ -442,6 +454,7 @@ def init_test_server_tun():
 
     tun = mock.AsyncMock()
     server.tunnel.tun_read = tun
+    server.tunnel.write = mock.MagicMock()
     return server, tun
 
 
@@ -493,3 +506,45 @@ async def test_tunnel_server_blocked_port():
     server.protocols = [base.ProtocolType.TCP]
     tun.return_value = package.ConnectPackage(base.ProtocolType.TCP)
     assert await server._handle() is False
+
+
+@pytest.mark.asyncio
+async def test_tunnel_ping(server, client):
+    # No ping when disabled
+    client.ping_enabled = False
+    await client.idle()
+    await asyncio.sleep(0.1)
+    assert client.last_ping is None
+    assert client.last_pong is None
+
+    # A ping is executed
+    client.ping_enabled = True
+    await client.idle()
+    await asyncio.sleep(0.1)
+    assert client.last_ping is not None
+    assert client.last_pong is not None
+
+    # Server sends pong and last_pong updates
+    pkg = package.PingPackage(client.last_ping + 1000)
+    client.last_ping = client.last_pong = None
+    await server.tunnels[client.uuid].tunnel.tun_write(pkg)
+    await asyncio.sleep(0.1)
+    assert client._check_alive() is True
+    assert client.last_pong is not None
+
+    # Stop the tunnel if time out
+    client.last_ping, client.last_pong = 0, 2 * base.INTERVAL_TIME
+    client.stop = mock.AsyncMock()
+    await client.idle()
+    assert client.stop.called
+
+    # Check the alive
+    client.last_ping, client.last_pong = 0, 0.5 * base.INTERVAL_TIME
+    assert client._check_alive() is True
+
+    client.last_ping = client.last_pong = None
+    assert client._check_alive() is True
+
+    # Ping too high
+    client.last_ping, client.last_pong = 0, 100000
+    assert client._check_alive() is False

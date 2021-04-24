@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import time
 
 from . import base, package, tunnel, utils
 from .config import config
@@ -22,6 +23,7 @@ class TunnelClient(tunnel.Tunnel):
         cert: str = None,
         key: str = None,
         verify_hostname: bool = True,
+        ping_enabled: bool = False,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -29,9 +31,14 @@ class TunnelClient(tunnel.Tunnel):
         self.dst_host, self.dst_port = dst_host, dst_port
         self.running = False
         self.addresses = []
+        self.ping_enabled = ping_enabled
+        self.last_ping = self.last_pong = None
 
         self.sc = utils.generate_ssl_context(
-            cert=cert, key=key, ca=ca, check_hostname=verify_hostname,
+            cert=cert,
+            key=key,
+            ca=ca,
+            check_hostname=verify_hostname,
         )
 
     def info(self, msg: str, *args) -> None:
@@ -39,6 +46,32 @@ class TunnelClient(tunnel.Tunnel):
 
     def error(self, msg: str, *args) -> None:
         _logger.error(msg.capitalize(), *args)
+
+    async def idle(self) -> None:
+        await super().idle()
+
+        if not self.ping_enabled:
+            return
+
+        # Break the connection if the last ping took too long
+        if not self._check_alive():
+            await self.stop()
+            return
+
+        # Send a ping regularly
+        self.last_ping = time.time()
+        await self.tunnel.tun_write(package.PingPackage(self.last_ping))
+
+    def _check_alive(self):
+        """ Check if the connection is alive using the last ping """
+
+        if self.last_ping is None or self.last_pong is None:
+            return True
+
+        if abs(self.last_pong - self.last_ping) <= base.INTERVAL_TIME:
+            return True
+
+        return False
 
     async def _client_loop(self, client: Connection) -> None:
         """ This is the main client loop """
@@ -90,16 +123,15 @@ class TunnelClient(tunnel.Tunnel):
         if not fp:
             return
 
-        json.dump(
-            {
-                "protocol": self.protocol.name,
-                "dest": [self.dst_host, self.dst_port],
-                "host": self.host,
-                "ports": [[ip_type.name, port] for ip_type, port in self.addresses],
-                "domain": self.domain,
-            },
-            fp,
-        )
+        data = {
+            "protocol": self.protocol.name,
+            "dest": [self.dst_host, self.dst_port],
+            "host": self.host,
+            "ports": [[ip_type.name, port] for ip_type, port in self.addresses],
+            "domain": self.domain,
+        }
+
+        json.dump(data, fp)
 
     async def _handle(self) -> bool:
         # We need the next package and try to evaluate it
@@ -128,6 +160,11 @@ class TunnelClient(tunnel.Tunnel):
         # Configuration comes back from the server we use that
         if isinstance(pkg, package.ConfigPackage):
             self.config_from_package(pkg)
+            return True
+
+        # Handle a ping package and reply
+        if isinstance(pkg, package.PingPackage):
+            self.last_pong = time.time()
             return True
 
         # A new client connected on the other side of the tunnel

@@ -46,6 +46,11 @@ class GUIClient(TunnelClient):
         total = self.tunnel.bytes_in + self.tunnel.bytes_out
         win.addstr(0, 2, "Info")
 
+        if self.last_ping and self.last_pong:
+            ping_time = f"{1000 * (self.last_pong - self.last_ping):.0f}"
+        else:
+            ping_time = "-"
+
         overhead = total / (bytes_in + bytes_out) - 1 if bytes_in + bytes_out else 0
 
         self._draw_lines(
@@ -54,7 +59,7 @@ class GUIClient(TunnelClient):
                 f"Clients: {len(self.clients)}",
                 f"Domain: {self.domain}",
                 f"Overhead: {100 * overhead:.2f} %",
-                f"Transfer In: {format_transfer(bytes_out)}",
+                f"Ping: {ping_time}" f"Transfer In: {format_transfer(bytes_out)}",
                 f"Transfer Out: {format_transfer(bytes_in)}",
                 f"Transfer Total: {format_transfer(bytes_in + bytes_out)}",
             ],
@@ -79,6 +84,7 @@ class GUIClient(TunnelClient):
                 f"Clients: {self.max_clients or '-'}",
                 f"Connections per IP: {self.max_connects or '-'}",
                 f"Idle timeout: {self.idle_timeout or 'off'}",
+                f"Ping: {'on' if self.ping_enabled else 'off'}",
                 f"Protocol: {self.protocol.name}",
             ],
         )

@@ -58,7 +58,10 @@ class TunnelServer(tunnel.Tunnel):
                 _logger.info("Connection number of %s resetted", ip)
 
     async def _client_accept(
-        self, reader: StreamReader, writer: StreamWriter, read_ahead: bytes = None,
+        self,
+        reader: StreamReader,
+        writer: StreamWriter,
+        read_ahead: bytes = None,
     ) -> None:
         """ Accept new clients and inform the tunnel about connections """
         host, port = writer.get_extra_info("peername")[:2]
@@ -115,7 +118,9 @@ class TunnelServer(tunnel.Tunnel):
             return False
 
         self.server = await asyncio.start_server(
-            self._client_accept, self.tunnel_host, port,
+            self._client_accept,
+            self.tunnel_host,
+            port,
         )
         asyncio.create_task(self._client_loop(self.server))
         return True
@@ -160,6 +165,11 @@ class TunnelServer(tunnel.Tunnel):
         if isinstance(pkg, package.ConfigPackage):
             self.config_from_package(pkg)
             await self._send_config()
+            return True
+
+        # Handle a ping package and reply
+        if isinstance(pkg, package.PingPackage):
+            await self.tunnel.tun_write(pkg)
             return True
 
         # Handle a closed client
