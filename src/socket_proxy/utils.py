@@ -179,8 +179,10 @@ def parse_address(
         try:
             parsed = urlsplit(f"http://{h}")
             hosts.add(parsed.hostname)
-        except Exception:
-            raise argparse.ArgumentTypeError("Invalid address parsed. Invalid host.")
+        except Exception as e:
+            raise argparse.ArgumentTypeError(
+                "Invalid address parsed. Invalid host."
+            ) from e
 
     # Multiple hosts are supported if the flag is set
     if len(hosts) > 1 and multiple:
@@ -204,8 +206,8 @@ def parse_networks(network: str) -> List[base.IPvXNetwork]:
     """ Try to parse multiple networks and return them optimized """
     try:
         return optimize_networks(*map(ipaddress.ip_network, network.split(",")))
-    except Exception:
-        raise argparse.ArgumentTypeError("Invalid network format")
+    except Exception as e:
+        raise argparse.ArgumentTypeError("Invalid network format") from e
 
 
 def valid_file(path: str) -> str:
