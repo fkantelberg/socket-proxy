@@ -10,7 +10,7 @@ def read(fname):
 
 setup(
     name="socket-proxy",
-    version="1.8.1",
+    version="1.8.2",
     author="Florian Kantelberg",
     author_email="florian.kantelberg@mailbox.org",
     description="Proxy TCP ports of local systems",
@@ -22,7 +22,7 @@ setup(
     packages=find_packages("src"),
     package_dir={"": "src"},
     include_package_data=True,
-    entry_points={"console_scripts": ["socket_proxy = socket_proxy.main:main"]},
+    entry_points={"console_scripts": ["socket_proxy = socket_proxy.__main__:main"]},
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
