@@ -7,7 +7,6 @@ from datetime import datetime, timedelta
 from typing import List, Tuple
 
 from . import base, package, tunnel, utils
-from .config import config
 from .connection import Connection
 
 _logger = logging.getLogger(__name__)
@@ -35,7 +34,7 @@ class TunnelServer(tunnel.Tunnel):
         self.ports = ports
         self.server = None
         self.connections = collections.defaultdict(base.Ban)
-        self.protocols = protocols or config.protocols
+        self.protocols = protocols or utils.protocols()
 
     def block(self, ip: base.IPvXAddress) -> bool:
         """ Decide whether the ip should be blocked """

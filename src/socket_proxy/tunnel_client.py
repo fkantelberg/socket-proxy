@@ -4,7 +4,6 @@ import logging
 import time
 
 from . import base, package, tunnel, utils
-from .config import config
 from .connection import Connection
 
 _logger = logging.getLogger(__name__)
@@ -119,7 +118,7 @@ class TunnelClient(tunnel.Tunnel):
             await client.drain()
 
     def store_information(self) -> None:
-        fp = config.get("store-information")
+        fp = base.config.store_information
         if not fp:
             return
 

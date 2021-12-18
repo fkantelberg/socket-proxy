@@ -1,3 +1,2 @@
 [run]
-omit = */__main__.py
-       */tunnel_gui.py
+omit = */tunnel_gui.py

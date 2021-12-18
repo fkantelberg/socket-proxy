@@ -15,7 +15,6 @@ from socket_proxy import (
     TunnelClient,
     TunnelServer,
     base,
-    config,
     connection,
     package,
     proxy,
@@ -218,10 +217,10 @@ async def test_tunnel_with_dummy(echo_server, server, client):
 
     # Write information into a file
     with StringIO() as fp:
-        config["store-information"] = fp
+        base.config.store_information = fp
         client.store_information()
         assert fp.tell()
-        config["store-information"] = None
+        base.config.store_information = None
 
     # Close the echo server
     echo_server.close()
@@ -312,7 +311,7 @@ async def test_tunnel_client_management():
     other.token = b"\xff" * base.CLIENT_NAME_SIZE
 
     # Create without clients
-    config["max-clients"] = 1
+    base.config.max_clients = 1
     tun = Tunnel()
     assert len(tun.clients) == 0
 
@@ -341,7 +340,7 @@ async def test_tunnel_client_management():
 
 @pytest.mark.asyncio
 async def test_tunnel_timeout():
-    config["max-clients"] = 1
+    base.config.max_clients = 1
     tun = Tunnel()
     tun.stop = mock.AsyncMock()
     tun.tunnel = mock.MagicMock()
@@ -407,7 +406,7 @@ def init_test_server():
     writer.get_extra_info = mock.MagicMock()
     writer.get_extra_info.return_value = ("127.0.0.1", TCP_PORT)
 
-    config["max-connects"] = 1
+    base.config.max_connects = 1
     server = TunnelServer(reader, writer)
     server.add = raiseAssert
     return server, reader, writer

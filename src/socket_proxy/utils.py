@@ -9,12 +9,51 @@ import socket
 import ssl
 import sys
 from random import shuffle
-from typing import List, Tuple, Union
+from typing import List, Set, Tuple, Union
 from urllib.parse import urlsplit
 
 from . import base
 
 _logger = logging.getLogger(__name__)
+
+
+class ConfigArgumentParser(argparse.ArgumentParser):
+    """ Helper class for the configuration management """
+
+    def _aggregate_actions(self, parser=None):
+        result = {}
+        for action in (parser or self)._actions:
+            if isinstance(action, argparse._SubParsersAction):
+                for sub in action.choices.values():
+                    result.update(self._aggregate_actions(sub))
+            elif action.option_strings:
+                result[action.dest] = action
+        return result
+
+    def parse_with_config(
+        self,
+        args: Tuple[str] = None,
+        config: dict = None,
+    ) -> argparse.Namespace:
+        """ Parse the arguments using additional configuration """
+        args = list(sys.argv[1:] if args is None else args[:])
+
+        actions = self._aggregate_actions()
+
+        for key, value in (config or {}).items():
+            action = actions.get(key)
+
+            # Skip if it's not a action or if already present in the arguments
+            if not action or any(opt in args for opt in action.option_strings):
+                continue
+
+            if isinstance(action, argparse._StoreConstAction):
+                args.append(action.option_strings[0])
+            elif isinstance(action, argparse._StoreAction):
+                args.extend((action.option_strings[0], str(value)))
+
+        print(config, args, actions)
+        return self.parse_args(args)
 
 
 def configure_logging(log_file: str, level: str) -> None:
@@ -208,6 +247,18 @@ def parse_networks(network: str) -> List[base.IPvXNetwork]:
         return optimize_networks(*map(ipaddress.ip_network, network.split(",")))
     except Exception as e:
         raise argparse.ArgumentTypeError("Invalid network format") from e
+
+
+def protocols() -> Set[base.ProtocolType]:
+    result = set()
+    for protocol in base.ProtocolType:
+        name = f"no-{protocol.name.lower()}".replace("-", "_")
+        if not getattr(base.config, name, False):
+            result.add(protocol)
+
+    if not base.config.http_domain:
+        result.discard(base.ProtocolType.HTTP)
+    return result
 
 
 def valid_file(path: str) -> str:

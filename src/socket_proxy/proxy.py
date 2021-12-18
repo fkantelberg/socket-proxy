@@ -5,7 +5,6 @@ from asyncio import StreamReader, StreamWriter
 from typing import List, Union
 
 from . import base, utils
-from .config import config
 from .tunnel_server import TunnelServer
 
 _logger = logging.getLogger(__name__)
@@ -29,8 +28,8 @@ class ProxyServer:
     ):
         self.kwargs = kwargs
         self.host, self.port = host, port
-        self.max_tunnels = config["max-tunnels"]
-        self.http_host, self.http_port = config["http-listen"]
+        self.max_tunnels = base.config.max_tunnels
+        self.http_host, self.http_port = base.config.http_listen
         self.tunnels = {}
         self.sc = utils.generate_ssl_context(cert=cert, key=key, ca=ca, server=True)
 

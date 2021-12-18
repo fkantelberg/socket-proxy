@@ -1,6 +1,8 @@
+import argparse
 import enum
 import ipaddress
 import logging
+import os
 from datetime import datetime
 from typing import TypeVar, Union
 
@@ -83,3 +85,33 @@ class Ban:
     def __init__(self):
         self.hits = 0
         self.first = datetime.now()
+
+
+config = argparse.Namespace(
+    ban_time=60,
+    ca=None,
+    cert=None,
+    cipher=None,
+    connect=None,
+    dst=None,
+    http_domain=None,
+    http_listen=("", DEFAULT_HTTP_PORT),
+    idle_timeout=0,
+    key=None,
+    listen=("", DEFAULT_PORT),
+    log_file=None,
+    log_level=DEFAULT_LOG_LEVEL,
+    max_clients=0,
+    max_connects=0,
+    max_tunnels=0,
+    mode=None,
+    networks=[],
+    no_curses="TERM" in os.environ,
+    no_server=False,
+    no_verify_hostname=False,
+    ping=False,
+    ports=None,
+    protocol=ProtocolType.TCP,
+    store_information=None,
+    tunnel_host=None,
+)

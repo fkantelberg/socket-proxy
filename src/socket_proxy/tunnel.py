@@ -4,7 +4,6 @@ import time
 from typing import Any, List
 
 from . import base, package, utils
-from .config import config
 from .connection import Connection
 
 _logger = logging.getLogger(__name__)
@@ -28,10 +27,10 @@ class Tunnel:
         self.protocol = protocol
         self.domain = domain or ""
         self.chunk_size = chunk_size
-        self.bantime = config["ban-time"]
-        self.max_clients = config["max-clients"]
-        self.max_connects = config["max-connects"]
-        self.idle_timeout = config["idle-timeout"]
+        self.bantime = base.config.ban_time
+        self.max_clients = base.config.max_clients
+        self.max_connects = base.config.max_connects
+        self.idle_timeout = base.config.idle_timeout
         self.networks = networks or []
 
     def __contains__(self, token: bytes) -> bool:

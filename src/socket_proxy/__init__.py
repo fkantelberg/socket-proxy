@@ -1,4 +1,4 @@
-from .config import config
+from .base import config
 from .connection import Connection
 from .package import *
 from .proxy import ProxyServer

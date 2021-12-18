@@ -1,13 +1,11 @@
 import argparse
 import ipaddress
 import socket
-from tempfile import NamedTemporaryFile
-from unittest import mock
+from unittest.mock import MagicMock
 
 import pytest
 
 from socket_proxy import base, utils
-from socket_proxy.config import OptionDefault, config, to_bool
 
 
 def test_transport_type():
@@ -22,16 +20,6 @@ def test_transport_type():
 def test_ban():
     ban = base.Ban()
     assert ban.hits == 0
-
-
-def test_to_bool():
-    assert to_bool("1") is True
-    assert to_bool("on") is True
-    assert to_bool("t") is True
-    assert to_bool("true") is True
-    assert to_bool("True") is True
-    assert to_bool("TRUE") is True
-    assert to_bool("False") is False
 
 
 def test_protocol_from_string():
@@ -54,40 +42,18 @@ def test_format_transfer():
     assert utils.format_transfer(4 << 40), "4 T"
 
 
-def test_config():
-    with NamedTemporaryFile() as fp:
-        fp.write(b"[server]\nban-time=15\nports=7000:9000\n[client]\nban-time=20\n")
-        fp.seek(0, 0)
-
-        assert not config.load("missing", fp.name)
-
-        assert "ban-time" in config
-        assert config.get("missing") is None
-        assert config["ban-time"] == OptionDefault["ban-time"]
-        assert config.load("server", fp.name)
-        assert config["ban-time"] == 15
-        assert config["ports"] == (7000, 9000)
-        config.load("client", fp.name)
-        assert config["ban-time"] == 20
-
-        args = mock.Mock()
-        args.ban_time = 45
-        config.load_arguments(args)
-        assert config["ban-time"] == 45
-
-
 def test_config_protocols():
-    config["no-tcp"] = 0
-    config["no-http"] = 0
-    config["http-domain"] = "example.org"
-    assert config.protocols == {base.ProtocolType.TCP, base.ProtocolType.HTTP}
-    config["no-tcp"] = 1
-    assert config.protocols == {base.ProtocolType.HTTP}
-    config["no-http"] = 1
-    assert config.protocols == set()
-    config["no-http"] = 0
-    config["http-domain"] = None
-    assert config.protocols == set()
+    base.config.no_tcp = 0
+    base.config.no_http = 0
+    base.config.http_domain = "example.org"
+    assert utils.protocols() == {base.ProtocolType.TCP, base.ProtocolType.HTTP}
+    base.config.no_tcp = 1
+    assert utils.protocols() == {base.ProtocolType.HTTP}
+    base.config.no_http = 1
+    assert utils.protocols() == set()
+    base.config.no_http = 0
+    base.config.http_domain = None
+    assert utils.protocols() == set()
 
 
 def test_configure_logging():
@@ -207,3 +173,27 @@ def test_valid_ports():
             utils.valid_ports(fail)
 
     assert utils.valid_ports("5000:6000") == (5000, 6000)
+
+
+def test_parser():
+    parser = utils.ConfigArgumentParser()
+    parser.add_argument("pos")
+    parser.add_argument("-f-a", "--flag-a")
+    parser.add_argument("-s", "--switch", default=False, action="store_true")
+    parser.add_argument("--other", "-o", default=False, action="store_true")
+    mock = parser.parse_args = MagicMock()
+
+    parser.parse_with_config([])
+    mock.assert_called_once_with([])
+    mock.reset_mock()
+
+    parser.parse_with_config(["--other"], {"unknown": True, "flag_a": 1, "switch": 42})
+    mock.assert_called_once_with(["--other", "-f-a", "1", "-s"])
+    mock.reset_mock()
+
+    parser.parse_with_config([], {"other": 1, "pos": 2, "help": True})
+    mock.assert_called_once_with(["--other"])
+    mock.reset_mock()
+
+    parser.parse_with_config(["-f-a", "42"], {"flag_a": 43})
+    mock.assert_called_once_with(["-f-a", "42"])
