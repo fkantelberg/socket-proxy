@@ -26,6 +26,7 @@ CLIENT_CERT = "pki/client.pem"
 CLIENT_KEY = "pki/client.key"
 SERVER_CERT = "pki/server.pem"
 SERVER_KEY = "pki/server.key"
+CRL = "pki/crl.pem"
 
 TCP_PORT = pytest_asyncio.plugin._unused_tcp_port()
 TCP_PORT_DUMMY = pytest_asyncio.plugin._unused_tcp_port()
@@ -49,6 +50,7 @@ def test_generate_ssl_context():
         cert=SERVER_CERT,
         key=SERVER_KEY,
         ca=CA_CERT,
+        crl=CRL,
         server=True,
     )
 
@@ -93,6 +95,7 @@ async def server(event_loop):
         cert=SERVER_CERT,
         key=SERVER_KEY,
         ca=CA_CERT,
+        crl=CRL,
     )
     Tunnel._interval = mock.AsyncMock()
     event_loop.create_task(server.loop())
@@ -129,6 +132,7 @@ async def http_server(event_loop):
         cert=SERVER_CERT,
         key=SERVER_KEY,
         ca=CA_CERT,
+        crl=CRL,
         http_domain="example.org",
         protocols=[base.ProtocolType.HTTP],
     )

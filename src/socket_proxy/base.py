@@ -92,6 +92,7 @@ config = argparse.Namespace(
     ca=None,
     cert=None,
     cipher=None,
+    crl=None,
     connect=None,
     dst=None,
     http_domain=None,

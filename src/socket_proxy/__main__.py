@@ -76,7 +76,15 @@ def security_group(parser: argparse.ArgumentParser, server: bool) -> None:
         help="Ciphers to use for the TLS connection.",
     )
 
-    if not server:
+    if server:
+        group.add_argument(
+            "--crl",
+            default=None,
+            metavar="FILE",
+            type=utils.valid_file,
+            help="CRL certificates to use.",
+        )
+    else:
         group.add_argument(
             "--no-verify-hostname",
             action="store_true",
@@ -342,6 +350,7 @@ def run_server() -> None:
         ca=base.config.ca,
         cert=base.config.cert,
         key=base.config.key,
+        crl=base.config.crl,
         http_domain=base.config.http_domain,
         tunnel_host=base.config.tunnel_host,
         ports=base.config.ports,

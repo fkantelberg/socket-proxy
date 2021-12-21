@@ -23,6 +23,7 @@ class ProxyServer:
         cert: str,
         key: str,
         ca: str = None,
+        crl: str = None,
         http_domain: str = None,
         **kwargs,
     ):
@@ -31,7 +32,13 @@ class ProxyServer:
         self.max_tunnels = base.config.max_tunnels
         self.http_host, self.http_port = base.config.http_listen
         self.tunnels = {}
-        self.sc = utils.generate_ssl_context(cert=cert, key=key, ca=ca, server=True)
+        self.sc = utils.generate_ssl_context(
+            cert=cert,
+            key=key,
+            ca=ca,
+            crl=crl,
+            server=True,
+        )
 
         if isinstance(http_domain, str):
             self.http_domain = http_domain

@@ -98,6 +98,7 @@ def generate_ssl_context(
     cert: str = None,
     key: str = None,
     ca: str = None,
+    crl: str = None,
     server: bool = False,
     ciphers: List[str] = None,
     check_hostname: bool = False,
@@ -123,6 +124,10 @@ def generate_ssl_context(
     if ca:
         ctx.verify_mode = ssl.CERT_REQUIRED
         ctx.load_verify_locations(cafile=ca)
+
+    if crl:
+        ctx.verify_flags |= ssl.VERIFY_CRL_CHECK_LEAF
+        ctx.load_verify_locations(cafile=crl)
 
     # Set possible ciphers to use
     if ciphers:
