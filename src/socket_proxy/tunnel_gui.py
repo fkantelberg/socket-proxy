@@ -47,7 +47,7 @@ class GUIClient(TunnelClient):
         win.addstr(0, 2, "Info")
 
         if self.last_ping and self.last_pong:
-            ping_time = f"{1000 * (self.last_pong - self.last_ping):.0f}"
+            ping_time = f"{1000 * (self.last_pong - self.last_ping):.0f}ms"
         else:
             ping_time = "-"
 
@@ -57,9 +57,10 @@ class GUIClient(TunnelClient):
             win,
             [
                 f"Clients: {len(self.clients)}",
-                f"Domain: {self.domain}",
-                f"Overhead: {100 * overhead:.2f} %",
-                f"Ping: {ping_time}" f"Transfer In: {format_transfer(bytes_out)}",
+                f"Domain: {self.domain or 'off'}",
+                f"Overhead: {100 * overhead:.2f}%",
+                f"Ping: {ping_time}",
+                f"Transfer In: {format_transfer(bytes_out)}",
                 f"Transfer Out: {format_transfer(bytes_in)}",
                 f"Transfer Total: {format_transfer(bytes_in + bytes_out)}",
             ],
@@ -113,9 +114,9 @@ class GUIClient(TunnelClient):
 
     def _draw_lines(self, win, lines: List[str]) -> None:
         """ Draw multiple lines in a window with some border """
-        h, w = [k - 4 for k in win.getmaxyx()]
+        h, w = [k - 3 for k in win.getmaxyx()]
         for y, line in enumerate(lines[:h]):
-            win.addstr(y + 2, 2, line[:w])
+            win.addstr(y + 1, 2, line[:w])
 
     async def _handle(self) -> bool:
         """ Handle the drawing after each package """
