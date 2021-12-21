@@ -83,7 +83,7 @@ def format_transfer(b: int) -> str:
 
     for symbol, size in symbols:
         if b >= size:
-            return f"{b / size:.1f} {symbol}"
+            return f"{b / size:.2f} {symbol}"
 
     return str(b)
 

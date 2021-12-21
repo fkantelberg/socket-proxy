@@ -41,28 +41,23 @@ class GUIClient(TunnelClient):
         win = self.scr.subwin(self.options, self.width // 2, 0, 0)
         win.box()
         win.border(0)
-        bytes_in = sum(cl.bytes_in for cl in self.clients.values())
-        bytes_out = sum(cl.bytes_out for cl in self.clients.values())
-        total = self.tunnel.bytes_in + self.tunnel.bytes_out
+        bytes_in = self.bytes_in + sum(cl.bytes_in for cl in self.clients.values())
+        bytes_out = self.bytes_out + sum(cl.bytes_out for cl in self.clients.values())
         win.addstr(0, 2, "Info")
 
         if self.last_ping and self.last_pong:
-            ping_time = f"{1000 * (self.last_pong - self.last_ping):.0f}ms"
+            ping_time = f"{1000 * (self.last_pong - self.last_ping):.0f} ms"
         else:
             ping_time = "-"
-
-        overhead = total / (bytes_in + bytes_out) - 1 if bytes_in + bytes_out else 0
 
         self._draw_lines(
             win,
             [
                 f"Clients: {len(self.clients)}",
                 f"Domain: {self.domain or 'off'}",
-                f"Overhead: {100 * overhead:.2f}%",
                 f"Ping: {ping_time}",
                 f"Transfer In: {format_transfer(bytes_out)}",
                 f"Transfer Out: {format_transfer(bytes_in)}",
-                f"Transfer Total: {format_transfer(bytes_in + bytes_out)}",
             ],
         )
         win.refresh()
@@ -80,11 +75,11 @@ class GUIClient(TunnelClient):
         self._draw_lines(
             win,
             [
-                f"Allowed networks: {', '.join(map(str, networks))}",
+                f"Allowed Networks: {', '.join(map(str, networks))}",
                 f"Ban time: {self.bantime or 'off'}",
-                f"Clients: {self.max_clients or '-'}",
                 f"Connections per IP: {self.max_connects or '-'}",
-                f"Idle timeout: {self.idle_timeout or 'off'}",
+                f"Idle Timeout: {self.idle_timeout or 'off'}",
+                f"Max Clients: {self.max_clients or '-'}",
                 f"Ping: {'on' if self.ping_enabled else 'off'}",
                 f"Protocol: {self.protocol.name}",
             ],
@@ -105,7 +100,7 @@ class GUIClient(TunnelClient):
         while not self.log_queue.empty():
             self.logs.append(self.log_queue.get().msg)
 
-        self.logs = self.logs[-self.height :]
+        self.logs = self.logs[-h - 2 :]
 
         self._draw_lines(win, self.logs)
 
@@ -114,7 +109,7 @@ class GUIClient(TunnelClient):
 
     def _draw_lines(self, win, lines: List[str]) -> None:
         """ Draw multiple lines in a window with some border """
-        h, w = [k - 3 for k in win.getmaxyx()]
+        h, w = [k - 2 for k in win.getmaxyx()]
         for y, line in enumerate(lines[:h]):
             win.addstr(y + 1, 2, line[:w])
 

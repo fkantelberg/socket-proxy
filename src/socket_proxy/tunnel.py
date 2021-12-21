@@ -32,6 +32,8 @@ class Tunnel:
         self.max_connects = base.config.max_connects
         self.idle_timeout = base.config.idle_timeout
         self.networks = networks or []
+        # Total bytes in/out for lost connections
+        self.bytes_in = self.bytes_out = 0
 
     def __contains__(self, token: bytes) -> bool:
         return token in self.clients
@@ -88,6 +90,8 @@ class Tunnel:
         """ Disconnect a client """
         client = self.pop(token)
         if client:
+            self.bytes_in += client.bytes_in
+            self.bytes_out += client.bytes_out
             _logger.info("Client %s disconnected", token.hex())
             await client.close()
 
