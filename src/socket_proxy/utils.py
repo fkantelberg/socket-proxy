@@ -52,7 +52,6 @@ class ConfigArgumentParser(argparse.ArgumentParser):
             elif isinstance(action, argparse._StoreAction):
                 args.extend((action.option_strings[0], str(value)))
 
-        print(config, args, actions)
         return self.parse_args(args)
 
 
