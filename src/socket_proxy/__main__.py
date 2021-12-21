@@ -247,7 +247,7 @@ def option_group(parser: argparse.ArgumentParser, server: bool) -> None:
     else:
         group.add_argument(
             "--no-curses",
-            default="TERM" in os.environ,
+            default="TERM" not in os.environ,
             action="store_true",
             help="Disable curses GUI",
         )
