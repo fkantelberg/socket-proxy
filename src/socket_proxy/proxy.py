@@ -86,10 +86,10 @@ class ProxyServer:
 
             if b":" in stripped:
                 header, value = (x.strip() for x in stripped.split(b":", 1))
-                headers[header] = value
+                headers[header.lower()] = value
 
         # Extract the host from the headers and try matching them
-        host = headers.get(b"X-Forwarded-Host", headers.get(b"Host", b""))
+        host = headers.get(b"x-forwarded-host", headers.get(b"host", b""))
         match = self.http_domain_regex.match(host)
         if not match or len(match.groups()) < 1:
             writer.write(b"%s 404 Not Found\r\n\r\n" % version)

@@ -191,7 +191,9 @@ class TunnelClient(tunnel.Tunnel):
     async def loop(self) -> None:
         """ Main client loop of the client side of the tunnel """
         self.tunnel = await Connection.connect(self.host, self.port, ssl=self.sc)
-        _logger.info("Tunnel %s:%s connected", self.host, self.port)
+        ssl_obj = self.tunnel.writer.get_extra_info("ssl_object")
+        extra = f" [{ssl_obj.version()}]" if ssl_obj else ""
+        _logger.info("Tunnel %s:%s connected%s", self.host, self.port, extra)
         _logger.info("Forwarding to %s:%s", self.dst_host, self.dst_port)
 
         try:

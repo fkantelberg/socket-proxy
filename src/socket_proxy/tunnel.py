@@ -81,10 +81,10 @@ class Tunnel:
         # Just output the current configuration
         networks = self.networks if self.networks else ["0.0.0.0/0", "::/0"]
         self.info(f"Allowed networks: {', '.join(map(str, networks))}")
-        self.info(f"ban time: {self.bantime or 'off'}")
-        self.info(f"clients: {self.max_clients or '-'}")
-        self.info(f"idle timeout: {self.idle_timeout or 'off'}")
-        self.info(f"connections per IP: {self.max_connects or '-'}")
+        self.info(f"Ban time: {self.bantime or 'off'}")
+        self.info(f"Clients: {self.max_clients or '-'}")
+        self.info(f"Idle timeout: {self.idle_timeout or 'off'}")
+        self.info(f"Connections per IP: {self.max_connects or '-'}")
 
     async def _disconnect_client(self, token: bytes) -> None:
         """ Disconnect a client """

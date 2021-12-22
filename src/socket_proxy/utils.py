@@ -137,7 +137,7 @@ def generate_ssl_context(
     _logger.info("CA usage: %s", bool(ca))
     _logger.info("Certificate: %s", bool(cert))
     _logger.info("Hostname verification: %s", bool(check_hostname))
-    _logger.info("Minimal TLS Versions: %s", ctx.minimum_version.name)
+    _logger.info("Minimal TLS Version: %s", ctx.minimum_version.name)
 
     ciphers = sorted(c["name"] for c in ctx.get_ciphers())
     _logger.info("Ciphers: %s", ", ".join(ciphers))
