@@ -14,7 +14,7 @@ used to directly contact the TCP port set up as destination in the connecting cl
 
 With this tool you can publish local service which might cause security issues for non-hardened
 ports. You should consider further security measurements to harden critical systems if used. The
-HTTP implementation is very basic and can't handle HTTPS. It's recommended to use a reverse proxy
+HTTP implementation is very basic. It's recommended to use a reverse proxy
 like nginx with SSL and a wildcard certificate if HTTPS is required.
 
 ### Features

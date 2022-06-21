@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import time
-from typing import Any, List
+from typing import List
 
 from . import base, package, utils
 from .connection import Connection
@@ -38,7 +38,7 @@ class Tunnel:
     def __contains__(self, token: bytes) -> bool:
         return token in self.clients
 
-    def __getitem__(self, token: bytes) -> Any:
+    def __getitem__(self, token: bytes) -> Connection:
         return self.clients[token]
 
     @property

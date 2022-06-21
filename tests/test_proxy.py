@@ -8,8 +8,6 @@ from io import StringIO
 from unittest import mock
 
 import pytest
-import pytest_asyncio.plugin
-
 from socket_proxy import (
     Tunnel,
     TunnelClient,
@@ -28,8 +26,8 @@ SERVER_CERT = "pki/server.pem"
 SERVER_KEY = "pki/server.key"
 CRL = "pki/crl.pem"
 
-TCP_PORT = pytest_asyncio.plugin._unused_tcp_port()
-TCP_PORT_DUMMY = pytest_asyncio.plugin._unused_tcp_port()
+TCP_PORT = utils.get_unused_port(5000, 10000)
+TCP_PORT_DUMMY = utils.get_unused_port(5000, 10000)
 
 proc = subprocess.Popen(["./certs.sh", "client"], stdin=subprocess.PIPE)
 proc.communicate()

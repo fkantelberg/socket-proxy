@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [tool.black]
 line-length = 88
-target-version = ['py37', 'py38']
+target-version = ['py37', 'py38', 'py39']
 include = '(\.pyi?$|src|tests)'
 
 [tool.tox]
 legacy_tox_ini = """
 [tox]
-envlist = clean,py38,report
+envlist = clean,py39,report
 
 [testenv]
 deps = pytest
@@ -19,9 +19,9 @@ deps = pytest
        pytest-timeout
        coverage
 depends:
-    py38: clean
-    report: py38
-commands = pytest --cov {envsitepackagesdir}/socket_proxy --cov-append --timeout 5
+    py39: clean
+    report: py39
+commands = pytest --cov {envsitepackagesdir}/socket_proxy --asyncio-mode=auto --cov-append --timeout 5
 
 [testenv:report]
 skip_install = true

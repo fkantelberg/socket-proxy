@@ -20,7 +20,7 @@ _logger = logging.getLogger(__name__)
 class ConfigArgumentParser(argparse.ArgumentParser):
     """ Helper class for the configuration management """
 
-    def _aggregate_actions(self, parser=None):
+    def _aggregate_actions(self, parser=None) -> dict:
         result = {}
         for action in (parser or self)._actions:
             if isinstance(action, argparse._SubParsersAction):

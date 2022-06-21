@@ -25,12 +25,14 @@ class ProxyServer:
         ca: str = None,
         crl: str = None,
         http_domain: str = None,
+        http_ssl: bool = False,
         **kwargs,
     ):
         self.kwargs = kwargs
         self.host, self.port = host, port
         self.max_tunnels = base.config.max_tunnels
         self.http_host, self.http_port = base.config.http_listen
+        self.http_ssl = http_ssl
         self.tunnels = {}
         self.sc = utils.generate_ssl_context(
             cert=cert,
@@ -124,6 +126,7 @@ class ProxyServer:
             self._request,
             self.http_host,
             self.http_port,
+            ssl=self.sc if self.http_ssl else None,
         )
 
         async with self.http_proxy:

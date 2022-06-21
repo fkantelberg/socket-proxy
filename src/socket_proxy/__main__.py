@@ -114,7 +114,7 @@ def connection_group(parser: argparse.ArgumentParser, server: bool) -> None:
             f"the server will listen on port {base.DEFAULT_PORT}.",
         )
         group.add_argument(
-            "--http-domain",
+            "--http-    domain",
             default=None,
             type=str,
             help="Specify the domain under which the sub-domains for the HTTP "
@@ -136,6 +136,12 @@ def connection_group(parser: argparse.ArgumentParser, server: bool) -> None:
             f"listen on multiple interfaces you can separate them by comma. If the "
             f"port is not given the server will listen on port "
             f"{base.DEFAULT_HTTP_PORT}.",
+        )
+        group.add_argument(
+            "--http-ssl",
+            default=False,
+            action="store_true",
+            help="Use the SSL context also for the http proxy.",
         )
 
         for protocol in base.ProtocolType:
@@ -352,6 +358,7 @@ def run_server() -> None:
         key=base.config.key,
         crl=base.config.crl,
         http_domain=base.config.http_domain,
+        http_ssl=base.config.http_ssl,
         tunnel_host=base.config.tunnel_host,
         ports=base.config.ports,
         networks=base.config.networks,

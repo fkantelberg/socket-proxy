@@ -4,13 +4,13 @@ from setuptools import find_packages, setup
 
 
 def read(fname):
-    with open(os.path.join(os.path.dirname(__file__), fname)) as f:
+    with open(os.path.join(os.path.dirname(__file__), fname), encoding="utf-8") as f:
         return f.read()
 
 
 setup(
     name="socket-proxy",
-    version="2.1.1",
+    version="2.2.0",
     author="Florian Kantelberg",
     author_email="florian.kantelberg@mailbox.org",
     description="Proxy TCP ports of local systems",

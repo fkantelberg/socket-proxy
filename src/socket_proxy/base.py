@@ -97,6 +97,7 @@ config = argparse.Namespace(
     dst=None,
     http_domain=None,
     http_listen=("", DEFAULT_HTTP_PORT),
+    http_ssl=False,
     idle_timeout=0,
     key=None,
     listen=("", DEFAULT_PORT),
