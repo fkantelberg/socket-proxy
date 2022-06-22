@@ -61,7 +61,7 @@ def test_generate_ssl_context():
     )
 
     assert all(isinstance(ctx, ssl.SSLContext) for ctx in (client, server))
-    assert len(server.get_ciphers()) > len(client.get_ciphers())
+    assert len(server.get_ciphers()) != len(client.get_ciphers())
 
 
 @pytest.fixture
