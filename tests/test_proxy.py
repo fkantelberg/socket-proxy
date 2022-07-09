@@ -8,6 +8,8 @@ from io import StringIO
 from unittest import mock
 
 import pytest
+from aiohttp import ClientSession
+
 from socket_proxy import (
     Tunnel,
     TunnelClient,
@@ -132,7 +134,28 @@ async def http_server(event_loop):
         ca=CA_CERT,
         crl=CRL,
         http_domain="example.org",
+        http_listen=("127.0.0.1", base.DEFAULT_HTTP_PORT),
         protocols=[base.ProtocolType.HTTP],
+    )
+    Tunnel._interval = mock.AsyncMock()
+    event_loop.create_task(server.loop())
+    await asyncio.sleep(0.1)
+    yield server
+    await server.stop()
+    await asyncio.sleep(0.1)
+
+
+@pytest.fixture
+async def api_server(event_loop):
+    server = proxy.ProxyServer(
+        host="",
+        port=TCP_PORT,
+        cert=SERVER_CERT,
+        key=SERVER_KEY,
+        ca=CA_CERT,
+        crl=CRL,
+        api_listen=("127.0.0.1", base.DEFAULT_API_PORT),
+        protocols=[base.ProtocolType.TCP, base.ProtocolType.HTTP],
     )
     Tunnel._interval = mock.AsyncMock()
     event_loop.create_task(server.loop())
@@ -550,3 +573,13 @@ async def test_tunnel_ping(server, client):
     # Ping too high
     client.last_ping, client.last_pong = 0, 100000
     assert client._check_alive() is False
+
+
+@pytest.mark.asyncio
+async def test_api_proxy(api_server, client, http_client):
+    async with ClientSession(f"http://localhost:{base.DEFAULT_API_PORT}") as session:
+        async with session.get("/") as response:
+            assert response.status == 200
+            data = await response.json()
+            assert data == api_server._build_state()
+            assert len(data["tunnels"]) == 2

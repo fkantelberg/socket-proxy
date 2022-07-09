@@ -19,25 +19,25 @@ class GUIClient(TunnelClient):
         self.configure_logging()
 
     def configure_logging(self) -> None:
-        """ Reconfigure the logging to catch the messages for the GUI """
+        """Reconfigure the logging to catch the messages for the GUI"""
         self.log_queue = queue.Queue()
         self.log_handler = QueueHandler(self.log_queue)
         self.log_handler.setFormatter(logging.Formatter(LOG_FORMAT, style="{"))
         logging.getLogger().handlers = [self.log_handler]
 
     def get_dimension(self) -> None:
-        """ Get the dimensions of the current window """
+        """Get the dimensions of the current window"""
         self.height, self.width = self.scr.getmaxyx()
 
     def _draw(self) -> None:
-        """ Draw all GUI elements """
+        """Draw all GUI elements"""
         self.scr.clear()
         self._draw_config()
         self._draw_info()
         self._draw_log()
 
     def _draw_info(self) -> None:
-        """ Draw a box with main information about the current status """
+        """Draw a box with main information about the current status"""
         win = self.scr.subwin(self.options, self.width // 2, 0, 0)
         win.box()
         win.border(0)
@@ -64,7 +64,7 @@ class GUIClient(TunnelClient):
         return win
 
     def _draw_config(self) -> None:
-        """ Draw a box with the current tunnel configuration """
+        """Draw a box with the current tunnel configuration"""
         mx, my = self.width // 2, self.options
         win = self.scr.subwin(my, self.width - mx, 0, mx)
         win.box()
@@ -88,7 +88,7 @@ class GUIClient(TunnelClient):
         return win
 
     def _draw_log(self) -> None:
-        """ Draw a box with the latest logs """
+        """Draw a box with the latest logs"""
         h = self.height - self.options - 4
         w = self.width - 4
 
@@ -108,19 +108,19 @@ class GUIClient(TunnelClient):
         return win
 
     def _draw_lines(self, win, lines: List[str]) -> None:
-        """ Draw multiple lines in a window with some border """
+        """Draw multiple lines in a window with some border"""
         h, w = [k - 2 for k in win.getmaxyx()]
         for y, line in enumerate(lines[:h]):
             win.addstr(y + 1, 2, line[:w])
 
     async def _handle(self) -> bool:
-        """ Handle the drawing after each package """
+        """Handle the drawing after each package"""
         self.get_dimension()
         self._draw()
         return await super()._handle()
 
     def _gui(self, scr) -> None:
-        """ Configure the main screen """
+        """Configure the main screen"""
         self.scr = scr
         curses.noecho()
         curses.curs_set(0)

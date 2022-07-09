@@ -18,7 +18,7 @@ _logger = logging.getLogger(__name__)
 
 
 class ConfigArgumentParser(argparse.ArgumentParser):
-    """ Helper class for the configuration management """
+    """Helper class for the configuration management"""
 
     def _aggregate_actions(self, parser=None) -> dict:
         result = {}
@@ -35,7 +35,7 @@ class ConfigArgumentParser(argparse.ArgumentParser):
         args: Tuple[str] = None,
         config: dict = None,
     ) -> argparse.Namespace:
-        """ Parse the arguments using additional configuration """
+        """Parse the arguments using additional configuration"""
         args = list(sys.argv[1:] if args is None else args[:])
 
         actions = self._aggregate_actions()
@@ -56,7 +56,7 @@ class ConfigArgumentParser(argparse.ArgumentParser):
 
 
 def configure_logging(log_file: str, level: str) -> None:
-    """ Configure the logging """
+    """Configure the logging"""
     level = base.LOG_LEVELS.get(level.lower(), logging.DEBUG)
 
     log = logging.getLogger()
@@ -75,7 +75,7 @@ def configure_logging(log_file: str, level: str) -> None:
 
 
 def format_transfer(b: int) -> str:
-    """ Format a number of bytes in a more human readable format """
+    """Format a number of bytes in a more human readable format"""
     symbols = [("T", 1 << 40), ("G", 1 << 30), ("M", 1 << 20), ("K", 1 << 10)]
 
     if b < 0:
@@ -89,7 +89,7 @@ def format_transfer(b: int) -> str:
 
 
 def generate_token() -> bytes:
-    """ Generate a random token used for identification of clients and tunnels """
+    """Generate a random token used for identification of clients and tunnels"""
     return secrets.token_bytes(base.CLIENT_NAME_SIZE)
 
 
@@ -103,7 +103,7 @@ def generate_ssl_context(
     ciphers: List[str] = None,
     check_hostname: bool = False,
 ) -> ssl.SSLContext:
-    """ Generate a SSL context for the tunnel """
+    """Generate a SSL context for the tunnel"""
 
     # Set the protocol and create the basic context
     proto = ssl.PROTOCOL_TLS_SERVER if server else ssl.PROTOCOL_TLS_CLIENT
@@ -146,7 +146,7 @@ def generate_ssl_context(
 
 
 def get_unused_port(min_port: int, max_port: int, udp: bool = False) -> int:
-    """ Returns a random unused port within the given range or None if all are used """
+    """Returns a random unused port within the given range or None if all are used"""
     sock = socket.socket(type=socket.SOCK_DGRAM) if udp else socket.socket()
     ports = list(range(min_port, max_port + 1))
     shuffle(ports)
@@ -196,7 +196,7 @@ def parse_address(
     # Only the address without scheme and path. We only support IPs if multiple hosts
     # are activated
     pattern = r"[0-9.:\[\],]*?" if multiple else r"[0-9a-zA-Z.:\[\],]*?"
-    match = re.match(fr"^(?P<hosts>{pattern})(:(?P<port>\d+))?$", address)
+    match = re.match(rf"^(?P<hosts>{pattern})(:(?P<port>\d+))?$", address)
     if not match:
         raise argparse.ArgumentTypeError(
             "Invalid address parsed. Only host and port are supported."
@@ -246,7 +246,7 @@ def parse_address(
 
 
 def parse_networks(network: str) -> List[base.IPvXNetwork]:
-    """ Try to parse multiple networks and return them optimized """
+    """Try to parse multiple networks and return them optimized"""
     try:
         return optimize_networks(*map(ipaddress.ip_network, network.split(",")))
     except Exception as e:
@@ -275,7 +275,7 @@ def valid_file(path: str) -> str:
 
 
 def valid_ports(ports: Tuple[int, int]) -> Tuple[int, int]:
-    """ Check if the argument is a valid port range with IP family """
+    """Check if the argument is a valid port range with IP family"""
     m = re.match(r"^(\d+):(\d+)?$", ports, re.IGNORECASE)
     if m:
         a, b = sorted(map(int, m.groups()))

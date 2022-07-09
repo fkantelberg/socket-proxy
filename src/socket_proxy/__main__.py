@@ -114,7 +114,7 @@ def connection_group(parser: argparse.ArgumentParser, server: bool) -> None:
             f"the server will listen on port {base.DEFAULT_PORT}.",
         )
         group.add_argument(
-            "--http-    domain",
+            "--http-domain",
             default=None,
             type=str,
             help="Specify the domain under which the sub-domains for the HTTP "
@@ -142,6 +142,27 @@ def connection_group(parser: argparse.ArgumentParser, server: bool) -> None:
             default=False,
             action="store_true",
             help="Use the SSL context also for the http proxy.",
+        )
+        group.add_argument(
+            "--api",
+            default=False,
+            action="store_true",
+            help="Enable the API",
+        )
+        group.add_argument(
+            "--api-listen",
+            default=("::1", base.DEFAULT_API_PORT),
+            type=lambda x: utils.parse_address(
+                x,
+                host="::1",
+                port=base.DEFAULT_API_PORT,
+                multiple=True,
+            ),
+            help=f"The address to listen on for the API. If host is not given "
+            f"the server will only listen for connection from localhost. "
+            f"IPs. If you want to listen on multiple interfaces you can separate "
+            f"them by comma. If the port is not given the server will listen on port "
+            f"{base.DEFAULT_API_PORT}.",
         )
 
         for protocol in base.ProtocolType:
@@ -359,6 +380,8 @@ def run_server() -> None:
         crl=base.config.crl,
         http_domain=base.config.http_domain,
         http_ssl=base.config.http_ssl,
+        http_listen=base.config.http_listen,
+        api_listen=base.config.api_listen if base.config.api else None,
         tunnel_host=base.config.tunnel_host,
         ports=base.config.ports,
         networks=base.config.networks,

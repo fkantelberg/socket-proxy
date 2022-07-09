@@ -11,7 +11,7 @@ _package_registry = {}
 
 
 class MetaPackage(type):
-    """ Meta class to register new packages using the type """
+    """Meta class to register new packages using the type"""
 
     def __new__(metacls, name, bases, attrs):
         ptype = attrs["_type"]
@@ -73,7 +73,7 @@ class Package(metaclass=MetaPackage):
     HEADER = PackageStruct("!B")
 
     def to_bytes(self) -> bytes:
-        """ Transform a package to bytes """
+        """Transform a package to bytes"""
         return self.HEADER.pack(self._type)
 
     @classmethod
@@ -84,7 +84,7 @@ class Package(metaclass=MetaPackage):
 
     @classmethod
     async def from_reader(cls, reader: asyncio.StreamReader) -> TypeVar("Package"):
-        """ Read the package type and enforce the building of the package """
+        """Read the package type and enforce the building of the package"""
         try:
             (ptype,) = await cls.HEADER.read(reader)
 
@@ -240,7 +240,9 @@ class ConfigPackage(Package):
     async def recv(cls, reader: asyncio.StreamReader) -> Tuple[Any]:
         res = await super().recv(reader)
         config = list(await cls.CONFIG.read(reader))
-        config[-1] = [PackageStruct.read_network(reader) for _ in range(config[-1])]
+        config[-1] = [
+            await PackageStruct.read_network(reader) for _ in range(config[-1])
+        ]
         return tuple(config) + res
 
 

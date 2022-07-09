@@ -10,7 +10,7 @@ _logger = logging.getLogger(__name__)
 
 
 class TunnelClient(tunnel.Tunnel):
-    """ Client side of the tunnel which will connect to a ProxyServer """
+    """Client side of the tunnel which will connect to a ProxyServer"""
 
     def __init__(
         self,
@@ -62,7 +62,7 @@ class TunnelClient(tunnel.Tunnel):
         await self.tunnel.tun_write(package.PingPackage(self.last_ping))
 
     def _check_alive(self):
-        """ Check if the connection is alive using the last ping """
+        """Check if the connection is alive using the last ping"""
 
         if self.last_ping is None or self.last_pong is None:
             return True
@@ -73,7 +73,7 @@ class TunnelClient(tunnel.Tunnel):
         return False
 
     async def _client_loop(self, client: Connection) -> None:
-        """ This is the main client loop """
+        """This is the main client loop"""
         _logger.info("Client %s connected", client.token.hex())
         while True:
             data = await client.read(self.chunk_size)
@@ -94,7 +94,7 @@ class TunnelClient(tunnel.Tunnel):
                 pass
 
     async def _connect_client(self, pkg: package.Package) -> None:
-        """ Handles the connection of a new client through the tunnel """
+        """Handles the connection of a new client through the tunnel"""
         if pkg.token in self:
             return
 
@@ -111,7 +111,7 @@ class TunnelClient(tunnel.Tunnel):
             await self.tunnel.tun_write(pkg)
 
     async def _send_data(self, pkg: package.Package) -> None:
-        """ Send data through the tunnel to the server side of the tunnel """
+        """Send data through the tunnel to the server side of the tunnel"""
         client = self.get(pkg.token)
         if client:
             client.write(pkg.data)
@@ -189,7 +189,7 @@ class TunnelClient(tunnel.Tunnel):
         return await super()._handle()
 
     async def loop(self) -> None:
-        """ Main client loop of the client side of the tunnel """
+        """Main client loop of the client side of the tunnel"""
         self.tunnel = await Connection.connect(self.host, self.port, ssl=self.sc)
         ssl_obj = self.tunnel.writer.get_extra_info("ssl_object")
         extra = f" [{ssl_obj.version()}]" if ssl_obj else ""
@@ -208,6 +208,6 @@ class TunnelClient(tunnel.Tunnel):
             _logger.info("Tunnel %s:%s closed", self.host, self.port)
 
     def start(self) -> None:
-        """ Start the client and the event loop """
+        """Start the client and the event loop"""
         _logger.info("Starting client...")
         asyncio.run(self.loop())

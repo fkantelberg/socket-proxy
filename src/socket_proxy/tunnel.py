@@ -10,7 +10,7 @@ _logger = logging.getLogger(__name__)
 
 
 class Tunnel:
-    """ Generic implementation of the tunnel """
+    """Generic implementation of the tunnel"""
 
     def __init__(
         self,
@@ -71,7 +71,7 @@ class Tunnel:
         return self.clients.pop(token, None)
 
     def config_from_package(self, pkg: package.ConfigPackage) -> None:
-        """ Merge the configuration with the current one """
+        """Merge the configuration with the current one"""
         self.bantime = utils.merge_settings(self.bantime, pkg.bantime)
         self.max_clients = utils.merge_settings(self.max_clients, pkg.clients)
         self.max_connects = utils.merge_settings(self.max_connects, pkg.connects)
@@ -87,7 +87,7 @@ class Tunnel:
         self.info(f"Connections per IP: {self.max_connects or '-'}")
 
     async def _disconnect_client(self, token: bytes) -> None:
-        """ Disconnect a client """
+        """Disconnect a client"""
         client = self.pop(token)
         if client:
             self.bytes_in += client.bytes_in
@@ -96,14 +96,14 @@ class Tunnel:
             await client.close()
 
     async def idle(self) -> None:
-        """ This methods will get called regularly to apply timeouts """
+        """This methods will get called regularly to apply timeouts"""
         if self.idle_timeout and self.tunnel:
             if time.time() - self.tunnel.last_time > self.idle_timeout:
                 self.info("timeout")
                 await self.stop()
 
     async def stop(self) -> None:
-        """ Disconnects all clients and stop the tunnel """
+        """Disconnects all clients and stop the tunnel"""
         for client in list(self.clients.values()):
             await client.close()
 
@@ -111,18 +111,18 @@ class Tunnel:
             await self.tunnel.close()
 
     async def _handle(self) -> bool:
-        """ Basic handler of the tunnel. Return False to leave the main loop """
+        """Basic handler of the tunnel. Return False to leave the main loop"""
         return False
 
     async def _serve(self) -> None:
-        """ Main tunnel loop """
+        """Main tunnel loop"""
         asyncio.create_task(self._interval())
 
         while await self._handle():
             pass
 
     async def _send_config(self) -> None:
-        """ Send the current configuration as a package through the tunnel """
+        """Send the current configuration as a package through the tunnel"""
         pkg = package.ConfigPackage(
             self.bantime,
             self.max_clients,
@@ -133,7 +133,7 @@ class Tunnel:
         await self.tunnel.tun_write(pkg)
 
     async def _interval(self) -> None:
-        """ Calls regularly the idle function """
+        """Calls regularly the idle function"""
         while True:
             await self.idle()
             await asyncio.sleep(base.INTERVAL_TIME)

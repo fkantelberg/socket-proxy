@@ -9,7 +9,7 @@ _logger = logging.getLogger(__name__)
 
 
 class Connection:
-    """ Wrapper class to handle StreamReader and StreamWriter """
+    """Wrapper class to handle StreamReader and StreamWriter"""
 
     def __init__(
         self,
@@ -42,7 +42,7 @@ class Connection:
         return cls(*streams, token=token)
 
     async def tun_data(self, token: bytes, data: bytes) -> None:
-        """ Write data packages on the tunnel and chunk them """
+        """Write data packages on the tunnel and chunk them"""
         if len(token) != base.CLIENT_NAME_SIZE:
             raise base.InvalidPackage()
 

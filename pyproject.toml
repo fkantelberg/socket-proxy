@@ -18,6 +18,7 @@ deps = pytest
        pytest-cov
        pytest-timeout
        coverage
+       aiohttp
 depends:
     py3: clean
     report: py3
