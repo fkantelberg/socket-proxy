@@ -33,14 +33,16 @@ class ProxyServer:
         http_ssl: bool = False,
         http_listen: Tuple[Union[str, List[str]], int] = None,
         api_listen: Tuple[Union[str, List[str]], int] = None,
+        api_token: str = None,
+        api_ssl: bool = False,
         **kwargs,
     ):
         self.kwargs = kwargs
         self.host, self.port = host, port
         self.max_tunnels = base.config.max_tunnels
         self.http_ssl = http_ssl
+        self.api_ssl = api_ssl
         self.tunnels = {}
-        self.api = None
         self.sc = utils.generate_ssl_context(
             cert=cert,
             key=key,
@@ -49,6 +51,8 @@ class ProxyServer:
             server=True,
         )
 
+        self.api = None
+        self.api_token = f"Bearer {api_token}" if api_token else None
         if api_listen:
             self.api_host, self.api_port = api_listen
         else:
@@ -172,7 +176,7 @@ class ProxyServer:
         for tuuid, tunnel in self.tunnels.items():
             tcp = http = {}
             if tunnel.protocol == base.ProtocolType.TCP:
-                tcp = {"host": tunnel.host, "port": tunnel.port}
+                tcp = [{"host": host, "port": port} for host, port in tunnel.addr]
             elif tunnel.protocol == base.ProtocolType.HTTP:
                 http = {"domain": tunnel.domain}
 
@@ -186,6 +190,7 @@ class ProxyServer:
                     "max_connects": tunnel.max_connects or None,
                     "networks": list(map(str, tunnel.networks)) or None,
                 },
+                "create_date": tunnel.create_date.isoformat(" "),
                 "traffic": {
                     "bytes_in": tunnel.bytes_in,
                     "bytes_out": tunnel.bytes_out,
@@ -210,21 +215,41 @@ class ProxyServer:
             "tunnels": tunnels,
         }
 
-    async def _api_index(self, request):
+    async def _api_index(self, request: web.Request) -> web.Response:
         """Response with the internal server state"""
-        return web.json_response(self._build_state())
+        if self.api_token and self.api_token != request.headers.get("Authorization"):
+            return web.HTTPForbidden()
+
+        data = self._build_state()
+        for key in filter(None, request.path.split("/")):
+            if key in data:
+                data = data[key]
+            else:
+                data = {}
+                break
+
+        return web.json_response(data)
 
     async def _start_api(self):
         """Start the API"""
-        _logger.info("Starting API on %s:%s", self.api_host, self.api_port)
+        extras = []
+        if self.api_ssl:
+            extras.append("tls")
+        if self.api_token:
+            extras.append("token")
+        extras = f"[{','.join(sorted(extras))}]" if extras else ""
+
+        _logger.info(f"Starting API on {self.api_host}:{self.api_port} {extras}")
         self.api = web.Application()
-        self.api.add_routes([web.get("/", self._api_index)])
+        self.api.add_routes([web.get(r"/{name:.*}", self._api_index)])
+
         await web._run_app(
             self.api,
             host=self.api_host,
             port=self.api_port,
             access_log_format='%a "%r" %s %b "%{Referer}i" "%{User-Agent}i"',
             print=None,
+            ssl_context=self.sc if self.api_ssl else None,
         )
 
     def start(self) -> None:

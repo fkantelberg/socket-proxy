@@ -97,6 +97,8 @@ class Ban:
 config = argparse.Namespace(
     api=False,
     api_listen=("::1", DEFAULT_API_PORT),
+    api_ssl=False,
+    api_token=None,
     ban_time=60,
     ca=None,
     cert=None,

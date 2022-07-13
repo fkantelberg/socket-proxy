@@ -9,7 +9,7 @@ import socket
 import ssl
 import sys
 from random import shuffle
-from typing import List, Set, Tuple, Union
+from typing import Any, List, Set, Tuple, Union
 from urllib.parse import urlsplit
 
 from . import base
@@ -47,7 +47,13 @@ class ConfigArgumentParser(argparse.ArgumentParser):
             if not action or any(opt in args for opt in action.option_strings):
                 continue
 
-            if isinstance(action, argparse._StoreConstAction):
+            if isinstance(action, argparse._StoreFalseAction):
+                if not to_bool(value):
+                    args.append(action.option_strings[0])
+            elif isinstance(action, argparse._StoreTrueAction):
+                if to_bool(value):
+                    args.append(action.option_strings[0])
+            elif isinstance(action, argparse._StoreConstAction):
                 args.append(action.option_strings[0])
             elif isinstance(action, argparse._StoreAction):
                 args.extend((action.option_strings[0], str(value)))
@@ -265,6 +271,12 @@ def protocols() -> Set[base.ProtocolType]:
     return result
 
 
+def to_bool(val: Any) -> bool:
+    if isinstance(val, str):
+        return val.lower() in ("true", "t", "1")
+    return bool(val)
+
+
 def valid_file(path: str) -> str:
     """Check if a file exists and return the absolute path otherwise raise an
     error. This function is used for the argument parsing"""
@@ -283,3 +295,10 @@ def valid_ports(ports: Tuple[int, int]) -> Tuple[int, int]:
             return a, b
         raise argparse.ArgumentTypeError("Port must be in range (1, 65536)")
     raise argparse.ArgumentTypeError("Invalid port scheme.")
+
+
+def valid_token(token: str) -> str:
+    """Check if the token is valid. Any alphanumeric token or UUID are allowed"""
+    if not re.fullmatch(r"[a-zA-Z0-9-]+", token):
+        raise argparse.ArgumentTypeError("Not a file.")
+    return token

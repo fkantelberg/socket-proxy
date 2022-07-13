@@ -27,10 +27,13 @@ class TunnelServer(tunnel.Tunnel):
         **kwargs,
     ):
         super().__init__(**kwargs)
+        self.create_date = datetime.now()
         self.tunnel = Connection(reader, writer, token=utils.generate_token())
         self.domain = f"{self.uuid}.{domain}" if domain else ""
         self.host, self.port = writer.get_extra_info("peername")[:2]
         self.tunnel_host = tunnel_host.split(",") if tunnel_host else ""
+        self.tunnel_port = None
+        self.addr = []
         self.ports = ports
         self.server = None
         self.connections = collections.defaultdict(base.Ban)
@@ -126,14 +129,14 @@ class TunnelServer(tunnel.Tunnel):
 
     async def _client_loop(self, server: asyncio.base_events.Server) -> None:
         """Main client loop initializing the client and managing the transmission"""
-        addresses = [sock.getsockname()[:2] for sock in server.sockets]
+        self.addr = [sock.getsockname()[:2] for sock in server.sockets]
 
         # Initialize the tunnel by sending the appropiate data
-        out = " ".join(sorted(f"{host}:{port}" for host, port in addresses))
+        out = " ".join(sorted(f"{host}:{port}" for host, port in self.addr))
         self.info("Listen on %s", out)
 
-        addresses = [(base.InternetType.from_ip(ip), port) for ip, port in addresses]
-        pkg = package.InitPackage(self.token, addresses, self.domain)
+        addr = [(base.InternetType.from_ip(ip), port) for ip, port in self.addr]
+        pkg = package.InitPackage(self.token, addr, self.domain)
         await self.tunnel.tun_write(pkg)
 
         # Start listening
