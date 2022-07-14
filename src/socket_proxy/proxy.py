@@ -50,8 +50,8 @@ class ProxyServer:
             crl=crl,
             server=True,
         )
+        self.api = self.http_proxy = self.server = None
 
-        self.api = None
         self.api_token = f"Bearer {api_token}" if api_token else None
         if api_listen:
             self.api_host, self.api_port = api_listen
@@ -239,7 +239,7 @@ class ProxyServer:
         extras = sorted(filter(None, extras))
         extras = f"[{','.join(extras)}]" if extras else ""
 
-        _logger.info(f"Starting API on {self.api_host}:{self.api_port} {extras}")
+        _logger.info("Starting API on %s:%s %s", self.api_host, self.api_port, extras)
         self.api = web.Application()
         self.api.add_routes([web.get(r"/{name:.*}", self._api_index)])
 

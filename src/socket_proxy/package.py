@@ -76,6 +76,7 @@ class Package(metaclass=MetaPackage):
         """Transform a package to bytes"""
         return self.HEADER.pack(self._type)
 
+    # pylint: disable=W0613
     @classmethod
     async def recv(cls, reader: asyncio.StreamReader) -> Tuple[Any]:
         """Read the package from the reader and return a tuple. The tuple is

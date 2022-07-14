@@ -1,12 +1,8 @@
 repos:
-  - repo: local
+  - repo: https://github.com/psf/black
+    rev: 22.3.0
     hooks:
       - id: black
-        name: black
-        language: system
-        entry: black
-        require_serial: true
-        types: [python]
 
   - repo: https://gitlab.com/pycqa/flake8
     rev: 3.7.9
@@ -19,3 +15,7 @@ repos:
     hooks:
       - id: isort
 
+  - repo: https://github.com/pre-commit/mirrors-pylint
+    rev: v2.7.4
+    hooks:
+      - id: pylint

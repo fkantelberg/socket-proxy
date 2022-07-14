@@ -16,6 +16,8 @@ class GUIClient(TunnelClient):
         super().__init__(*args, **kwargs)
         self.options = 10
         self.logs = []
+        self.width = self.height = 0
+        self.scr = None
         self.configure_logging()
 
     def configure_logging(self) -> None:

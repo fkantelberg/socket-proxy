@@ -31,10 +31,13 @@ CRL = "pki/crl.pem"
 TCP_PORT = utils.get_unused_port(5000, 10000)
 TCP_PORT_DUMMY = utils.get_unused_port(5000, 10000)
 
-proc = subprocess.Popen(["./certs.sh", "client"], stdin=subprocess.PIPE)
-proc.communicate()
-proc = subprocess.Popen(["./certs.sh", "server"], stdin=subprocess.PIPE)
-proc.communicate(b"y\n" * 80)
+with subprocess.Popen(["./certs.sh", "client"], stdin=subprocess.PIPE) as proc:
+    proc.communicate()
+with subprocess.Popen(["./certs.sh", "server"], stdin=subprocess.PIPE) as proc:
+    proc.communicate(b"y\n" * 80)
+
+
+# pylint: disable=W0613
 
 
 def raiseAssert(*args, **kwargs):
@@ -194,7 +197,7 @@ async def test_connection_wrong_token():
 
 @pytest.mark.asyncio
 async def test_tunnel_idle():
-    async def idle(*args, **kwargs):
+    async def idle(*_args, **_kwargs):
         if not hasattr(idle, "counter"):
             idle.counter = True
         else:

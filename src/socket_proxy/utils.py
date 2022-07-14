@@ -143,6 +143,7 @@ def generate_ssl_context(
     _logger.info("CA usage: %s", bool(ca))
     _logger.info("Certificate: %s", bool(cert))
     _logger.info("Hostname verification: %s", bool(check_hostname))
+    # pylint: disable=no-member
     _logger.info("Minimal TLS Version: %s", ctx.minimum_version.name)
 
     ciphers = sorted(c["name"] for c in ctx.get_ciphers())
