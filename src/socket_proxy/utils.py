@@ -300,5 +300,5 @@ def valid_ports(ports: Tuple[int, int]) -> Tuple[int, int]:
 def valid_token(token: str) -> str:
     """Check if the token is valid. Any alphanumeric token or UUID are allowed"""
     if not re.fullmatch(r"[a-zA-Z0-9-]+", token):
-        raise argparse.ArgumentTypeError("Not a file.")
+        raise argparse.ArgumentTypeError("Invalid token format [a-zA-Z0-9-]+")
     return token

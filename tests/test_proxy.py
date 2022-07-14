@@ -583,3 +583,20 @@ async def test_api_proxy(api_server, client, http_client):
             data = await response.json()
             assert data == api_server._build_state()
             assert len(data["tunnels"]) == 2
+
+        async with session.get("/tcp") as response:
+            assert response.status == 200
+            data = await response.json()
+            assert data == api_server._build_state()["tcp"]
+
+        async with session.get("/invalid") as response:
+            assert response.status == 200
+            assert await response.json() == {}
+
+        api_server.api_token = "Bearer abcd"
+        async with session.get("/") as response:
+            assert response.status == 403
+
+        headers = {"Authorization": "Bearer abcd"}
+        async with session.get("/", headers=headers) as response:
+            assert response.status == 200

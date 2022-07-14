@@ -2,6 +2,7 @@ import argparse
 import ipaddress
 import socket
 from unittest.mock import MagicMock
+from uuid import uuid4
 
 import pytest
 
@@ -175,12 +176,20 @@ def test_valid_ports():
     assert utils.valid_ports("5000:6000") == (5000, 6000)
 
 
+def test_valid_token():
+    with pytest.raises(argparse.ArgumentTypeError):
+        utils.valid_token("")
+
+    token = str(uuid4())
+    assert utils.valid_token(token) == token
+
+
 def test_parser():
     parser = utils.ConfigArgumentParser()
     parser.add_argument("pos")
     parser.add_argument("-f-a", "--flag-a")
     parser.add_argument("-s", "--switch", default=False, action="store_true")
-    parser.add_argument("--other", "-o", default=False, action="store_true")
+    parser.add_argument("--other", "-o", default=True, action="store_false")
     mock = parser.parse_args = MagicMock()
 
     parser.parse_with_config([])
@@ -191,7 +200,11 @@ def test_parser():
     mock.assert_called_once_with(["--other", "-f-a", "1", "-s"])
     mock.reset_mock()
 
-    parser.parse_with_config([], {"other": 1, "pos": 2, "help": True})
+    parser.parse_with_config([], {"switch": "true"})
+    mock.assert_called_once_with(["-s"])
+    mock.reset_mock()
+
+    parser.parse_with_config([], {"other": "0"})
     mock.assert_called_once_with(["--other"])
     mock.reset_mock()
 

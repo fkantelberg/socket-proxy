@@ -222,7 +222,7 @@ class ProxyServer:
 
         data = self._build_state()
         for key in filter(None, request.path.split("/")):
-            if key in data:
+            if isinstance(data, dict) and key in data:
                 data = data[key]
             else:
                 data = {}
@@ -232,12 +232,12 @@ class ProxyServer:
 
     async def _start_api(self):
         """Start the API"""
-        extras = []
-        if self.api_ssl:
-            extras.append("tls")
-        if self.api_token:
-            extras.append("token")
-        extras = f"[{','.join(sorted(extras))}]" if extras else ""
+        extras = [
+            "tls" if self.api_ssl else "",
+            "token" if self.api_token else "",
+        ]
+        extras = sorted(filter(None, extras))
+        extras = f"[{','.join(extras)}]" if extras else ""
 
         _logger.info(f"Starting API on {self.api_host}:{self.api_port} {extras}")
         self.api = web.Application()
