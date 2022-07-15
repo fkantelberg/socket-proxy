@@ -118,21 +118,24 @@ class TunnelClient(tunnel.Tunnel):
             await client.drain()
 
     def store_information(self) -> None:
+        """Store information in a file to make it easier to use in services"""
         fp = base.config.store_information
         if not fp:
             return
 
         data = {
-            "protocol": self.protocol.name,
-            "dest": [self.dst_host, self.dst_port],
-            "host": self.host,
-            "ports": [[ip_type.name, port] for ip_type, port in self.addresses],
-            "domain": self.domain,
+            "config": self.get_config_dict(),
+            "create_date": self.create_date.isoformat(" "),
+            "client": {"host": self.dst_host, "port": self.dst_port},
+            "protocol": str(self.protocol),
+            "http": {"domain": self.domain},
+            "tcp": [{"host": self.host, "port": port} for _, port in self.addresses],
         }
 
         json.dump(data, fp)
 
     async def _handle(self) -> bool:
+        """Read a package from the tunnel and handle them properly"""
         # We need the next package and try to evaluate it
         pkg = await self.tunnel.tun_read()
 

@@ -27,7 +27,6 @@ class TunnelServer(tunnel.Tunnel):
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.create_date = datetime.now()
         self.tunnel = Connection(reader, writer, token=utils.generate_token())
         self.domain = f"{self.uuid}.{domain}" if domain else ""
         self.host, self.port = writer.get_extra_info("peername")[:2]

@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import time
+from datetime import datetime
 from typing import List
 
 from . import base, package, utils
@@ -22,6 +23,7 @@ class Tunnel:
         **kwargs,
     ):
         super().__init__(**kwargs)
+        self.create_date = datetime.now()
         self.tunnel = None
         self.clients = {}
         self.protocol = protocol
@@ -48,6 +50,17 @@ class Tunnel:
     @property
     def uuid(self) -> str:
         return self.tunnel.uuid
+
+    def get_config_dict(self):
+        """Return the configuration as a dictionary used in the API or client"""
+        return {
+            "bantime": self.bantime or None,
+            "chunk_size": self.chunk_size,
+            "idle_timeout": self.idle_timeout or None,
+            "max_clients": self.max_clients or None,
+            "max_connects": self.max_connects or None,
+            "networks": list(map(str, self.networks)) or None,
+        }
 
     def info(self, msg: str, *args) -> None:
         _logger.info("Tunnel %s " + msg, self.uuid, *args)

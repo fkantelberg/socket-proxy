@@ -182,14 +182,7 @@ class ProxyServer:
 
             tunnels[tuuid] = {
                 "client": {"host": tunnel.host, "port": tunnel.port},
-                "config": {
-                    "bantime": tunnel.bantime or None,
-                    "chunk_size": tunnel.chunk_size,
-                    "idle_timeout": tunnel.idle_timeout or None,
-                    "max_clients": tunnel.max_clients or None,
-                    "max_connects": tunnel.max_connects or None,
-                    "networks": list(map(str, tunnel.networks)) or None,
-                },
+                "config": tunnel.get_config_dict(),
                 "create_date": tunnel.create_date.isoformat(" "),
                 "traffic": {
                     "bytes_in": tunnel.bytes_in,

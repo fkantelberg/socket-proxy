@@ -12,6 +12,8 @@ _logger = logging.getLogger(__name__)
 
 
 class GUIClient(TunnelClient):
+    """ncurses GUI for tunnel clients"""
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.options = 10
