@@ -123,12 +123,12 @@ class TunnelServer(tunnel.Tunnel):
             self.tunnel_host,
             self.tunnel_port,
         )
-        asyncio.create_task(self._client_loop(self.server))
+        asyncio.create_task(self._client_loop())
         return True
 
-    async def _client_loop(self, server: asyncio.base_events.Server) -> None:
+    async def _client_loop(self) -> None:
         """Main client loop initializing the client and managing the transmission"""
-        self.addr = [sock.getsockname()[:2] for sock in server.sockets]
+        self.addr = [sock.getsockname()[:2] for sock in self.server.sockets]
 
         # Initialize the tunnel by sending the appropiate data
         out = " ".join(sorted(f"{host}:{port}" for host, port in self.addr))
@@ -139,8 +139,8 @@ class TunnelServer(tunnel.Tunnel):
         await self.tunnel.tun_write(pkg)
 
         # Start listening
-        async with server:
-            await server.serve_forever()
+        async with self.server:
+            await self.server.serve_forever()
 
     async def _handle(self) -> bool:
         pkg = await self.tunnel.tun_read()
