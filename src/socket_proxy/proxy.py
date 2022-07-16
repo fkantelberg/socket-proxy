@@ -171,7 +171,7 @@ class ProxyServer:
         async with self.server:
             await self.server.serve_forever()
 
-    def _build_state(self):
+    def _build_state(self) -> None:
         tunnels = {}
         for tuuid, tunnel in self.tunnels.items():
             tcp = http = {}
@@ -223,7 +223,7 @@ class ProxyServer:
 
         return web.json_response(data)
 
-    async def _start_api(self):
+    async def _start_api(self) -> None:
         """Start the API"""
         extras = [
             "tls" if self.api_ssl else "",
