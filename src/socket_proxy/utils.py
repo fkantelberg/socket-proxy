@@ -41,7 +41,7 @@ class ConfigArgumentParser(argparse.ArgumentParser):
         actions = self._aggregate_actions()
 
         for key, value in (config or {}).items():
-            action = actions.get(key)
+            action = actions.get(key.replace("-", "_"))
 
             # Skip if it's not a action or if already present in the arguments
             if not action or any(opt in args for opt in action.option_strings):

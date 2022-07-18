@@ -114,8 +114,7 @@ class TunnelClient(tunnel.Tunnel):
         """Send data through the tunnel to the server side of the tunnel"""
         client = self.get(pkg.token)
         if client:
-            client.write(pkg.data)
-            await client.drain()
+            await client.write(pkg.data)
 
     def store_information(self) -> None:
         """Store information in a file to make it easier to use in services"""

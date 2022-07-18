@@ -47,8 +47,7 @@ class Connection:
             raise base.InvalidPackage()
 
         pkg = package.ClientDataPackage(data, token)
-        self.write(pkg.to_bytes())
-        await self.drain()
+        await self.write(pkg.to_bytes())
 
     async def close(self) -> None:
         try:
@@ -62,8 +61,7 @@ class Connection:
         return await package.Package.from_reader(self)
 
     async def tun_write(self, pkg: package.Package) -> None:
-        self.write(pkg.to_bytes())
-        await self.drain()
+        await self.write(pkg.to_bytes())
 
     async def readexactly(self, size: int) -> bytes:
         data = await self.reader.readexactly(size)
@@ -77,10 +75,8 @@ class Connection:
         self.last_time = time.time()
         return data
 
-    def write(self, data: bytes) -> None:
+    async def write(self, data: bytes) -> None:
         self.bytes_out += len(data)
         self.last_time = time.time()
         self.writer.write(data)
-
-    async def drain(self) -> None:
         await self.writer.drain()

@@ -186,8 +186,7 @@ class TunnelServer(tunnel.Tunnel):
                 return False
 
             conn = self[pkg.token]
-            conn.write(pkg.data)
-            await conn.drain()
+            await conn.write(pkg.data)
             return True
 
         # Invalid package means to close the connection

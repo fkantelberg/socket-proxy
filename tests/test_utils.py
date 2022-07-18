@@ -1,5 +1,6 @@
 import argparse
 import ipaddress
+import logging
 import socket
 from unittest.mock import MagicMock
 from uuid import uuid4
@@ -59,7 +60,11 @@ def test_config_protocols():
 
 def test_configure_logging():
     utils.configure_logging(None, "INFO")
+    log = logging.getLogger()
+    list(map(log.removeHandler, log.handlers))
+
     utils.configure_logging("test.log", "DEBUG")
+    list(map(log.removeHandler, log.handlers))
 
 
 def test_token():
@@ -190,6 +195,7 @@ def test_parser():
     parser.add_argument("-f-a", "--flag-a")
     parser.add_argument("-s", "--switch", default=False, action="store_true")
     parser.add_argument("--other", "-o", default=True, action="store_false")
+    parser.add_argument("-c", action="store_const", const=42)
     mock = parser.parse_args = MagicMock()
 
     parser.parse_with_config([])
@@ -210,3 +216,7 @@ def test_parser():
 
     parser.parse_with_config(["-f-a", "42"], {"flag_a": 43})
     mock.assert_called_once_with(["-f-a", "42"])
+    mock.reset_mock()
+
+    parser.parse_with_config(["-c"], {})
+    mock.assert_called_once_with(["-c"])

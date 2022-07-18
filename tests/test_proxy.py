@@ -482,7 +482,7 @@ def init_test_server_tun():
 
     tun = mock.AsyncMock()
     server.tunnel.tun_read = tun
-    server.tunnel.write = mock.MagicMock()
+    server.tunnel.write = mock.AsyncMock()
     return server, tun
 
 
