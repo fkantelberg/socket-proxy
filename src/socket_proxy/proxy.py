@@ -211,7 +211,7 @@ class ProxyServer:
     async def _api_index(self, request: web.Request) -> web.Response:
         """Response with the internal server state"""
         if self.api_token and self.api_token != request.headers.get("Authorization"):
-            return web.HTTPForbidden()
+            raise web.HTTPForbidden()
 
         data = self._build_state()
         for key in filter(None, request.path.split("/")):
