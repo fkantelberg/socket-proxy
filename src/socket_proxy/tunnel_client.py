@@ -1,10 +1,16 @@
 import asyncio
-import json
 import logging
 import time
 
 from . import base, package, tunnel, utils
+from .base import config
 from .connection import Connection
+
+try:
+    from aiohttp import web
+    from aiohttp.web import Request, Response
+except ImportError:
+    web = Request = Response = None
 
 _logger = logging.getLogger(__name__)
 
@@ -21,23 +27,31 @@ class TunnelClient(tunnel.Tunnel):
         ca: str,
         cert: str = None,
         key: str = None,
-        verify_hostname: bool = True,
-        ping_enabled: bool = False,
         **kwargs,
     ):
         super().__init__(**kwargs)
+
         self.host, self.port = host, port
         self.dst_host, self.dst_port = dst_host, dst_port
         self.running = False
         self.addresses = []
-        self.ping_enabled = ping_enabled
         self.last_ping = self.last_pong = None
+        self.api = None
+
+        self.ping_enabled = config.ping
+
+        self.api_token = f"Bearer {config.api_token}" if config.api_token else None
+        api_listen = config.api_listen if config.api else None
+        if api_listen:
+            self.api_host, self.api_port = api_listen
+        else:
+            self.api_host = self.api_port = False
 
         self.sc = utils.generate_ssl_context(
             cert=cert,
             key=key,
             ca=ca,
-            check_hostname=verify_hostname,
+            check_hostname=not config.no_verify_hostname,
         )
 
     def info(self, msg: str, *args) -> None:
@@ -116,23 +130,6 @@ class TunnelClient(tunnel.Tunnel):
         if client:
             await client.write(pkg.data)
 
-    def store_information(self) -> None:
-        """Store information in a file to make it easier to use in services"""
-        fp = base.config.store_information
-        if not fp:
-            return
-
-        data = {
-            "config": self.get_config_dict(),
-            "create_date": self.create_date.isoformat(" "),
-            "client": {"host": self.dst_host, "port": self.dst_port},
-            "protocol": str(self.protocol),
-            "http": {"domain": self.domain},
-            "tcp": [{"host": self.host, "port": port} for _, port in self.addresses],
-        }
-
-        json.dump(data, fp)
-
     async def _handle(self) -> bool:
         """Read a package from the tunnel and handle them properly"""
         # We need the next package and try to evaluate it
@@ -150,9 +147,6 @@ class TunnelClient(tunnel.Tunnel):
 
             if self.protocol == base.ProtocolType.HTTP:
                 self.info("domain: %s", self.domain)
-
-            # Store information into a file
-            self.store_information()
 
             # Send the configuration to the server for negotiation
             await self._send_config()
@@ -190,6 +184,58 @@ class TunnelClient(tunnel.Tunnel):
 
         return await super()._handle()
 
+    async def _api_index(self, request: Request) -> Response:
+        """Response with the internal server state"""
+        if self.api_token and self.api_token != request.headers.get("Authorization"):
+            raise web.HTTPForbidden()
+
+        data = self.get_state_dict(True)
+        try:
+            data = utils.traverse_dict(data, *request.path.split("/"))
+        except KeyError as e:
+            raise web.HTTPNotFound() from e
+
+        return web.json_response(data)
+
+    async def _api_delete(self, request: Request) -> Response:
+        """Disconnect a specific client"""
+        if self.api_token and self.api_token != request.headers.get("Authorization"):
+            raise web.HTTPForbidden()
+
+        keys = list(filter(None, request.path.split("/")))
+        if len(keys) < 1:
+            raise web.HTTPNotFound()
+
+        for ctoken, cli in self.clients.items():
+            if cli.uuid == keys[0]:
+                await self._disconnect_client(ctoken)
+                raise web.HTTPOk()
+
+        raise web.HTTPNotFound()
+
+    async def _start_api(self) -> None:
+        """Start the API"""
+        extras = ["token" if self.api_token else ""]
+        extras = sorted(filter(None, extras))
+        extras = f"[{','.join(extras)}]" if extras else ""
+
+        _logger.info("Starting API on %s:%s %s", self.api_host, self.api_port, extras)
+        self.api = web.Application()
+        self.api.add_routes(
+            [
+                web.get(r"/{name:.*}", self._api_index),
+                web.delete(r"/{name:.*}", self._api_delete),
+            ]
+        )
+
+        await web._run_app(
+            self.api,
+            host=self.api_host,
+            port=self.api_port,
+            access_log_format='%a "%r" %s %b "%{Referer}i" "%{User-Agent}i"',
+            print=None,
+        )
+
     async def loop(self) -> None:
         """Main client loop of the client side of the tunnel"""
         self.tunnel = await Connection.connect(self.host, self.port, ssl=self.sc)
@@ -197,6 +243,9 @@ class TunnelClient(tunnel.Tunnel):
         extra = f" [{ssl_obj.version()}]" if ssl_obj else ""
         _logger.info("Tunnel %s:%s connected%s", self.host, self.port, extra)
         _logger.info("Forwarding to %s:%s", self.dst_host, self.dst_port)
+
+        if self.api_port:
+            asyncio.create_task(self._start_api())
 
         try:
             # Start the tunnel and send the initial package

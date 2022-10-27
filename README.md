@@ -44,7 +44,17 @@ $ socket_proxy client --ca ca.pem -c SERVER -d TARGET:PORT
 
 4. Connect clients to the opened ports on the server
 
-### Web API
+### Web API Client
+
+`GET /` returns the state of the server as JSON dictionary. Use the path to get only specific information.
+E.g. `/clients` only returns the sub-dictionary `clients` and `/clients/edcb13dc0c7c6c64` returns only
+information about the client `edcb13dc0c7c6c64`.
+
+`DELETE /<client>` disconnects the client `<client>`.
+
+The client side API doesn't support SSL!
+
+### Web API Server
 
 `GET /` returns the state of the server as JSON dictionary. Use the path to get only specific information.
 E.g. `/tunnels` only returns the sub-dictionary `tunnels` and `/tunnels/edcb13dc0c7c6c64` returns only

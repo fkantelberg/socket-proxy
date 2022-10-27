@@ -2,9 +2,10 @@ import asyncio
 import logging
 import re
 from asyncio import StreamReader, StreamWriter
-from typing import List, Tuple, Union
+from typing import List, Union
 
 from . import base, utils
+from .base import config
 from .tunnel_server import TunnelServer
 
 try:
@@ -30,19 +31,12 @@ class ProxyServer:
         key: str,
         ca: str = None,
         crl: str = None,
-        http_domain: str = None,
-        http_ssl: bool = False,
-        http_listen: Tuple[Union[str, List[str]], int] = None,
-        api_listen: Tuple[Union[str, List[str]], int] = None,
-        api_token: str = None,
-        api_ssl: bool = False,
         **kwargs,
     ):
         self.kwargs = kwargs
         self.host, self.port = host, port
-        self.max_tunnels = base.config.max_tunnels
-        self.http_ssl = http_ssl
-        self.api_ssl = api_ssl
+        self.max_tunnels = config.max_tunnels
+        self.http_ssl = config.http_ssl
         self.tunnels = {}
         self.sc = utils.generate_ssl_context(
             cert=cert,
@@ -51,19 +45,22 @@ class ProxyServer:
             crl=crl,
             server=True,
         )
+
         self.api = self.http_proxy = self.server = None
 
-        self.api_token = f"Bearer {api_token}" if api_token else None
+        self.api_ssl = config.api_ssl
+        self.api_token = f"Bearer {config.api_token}" if config.api_token else None
+        api_listen = config.api_listen if config.api else None
         if api_listen:
             self.api_host, self.api_port = api_listen
         else:
             self.api_host = self.api_port = False
 
-        if isinstance(http_domain, str) and http_listen:
-            self.http_host, self.http_port = http_listen
-            self.http_domain = http_domain
+        if isinstance(config.http_domain, str) and config.http_listen:
+            self.http_host, self.http_port = config.http_listen
+            self.http_domain = config.http_domain
             self.http_domain_regex = re.compile(
-                rb"^(.*)\.%s$" % http_domain.replace(".", r"\.").encode()
+                rb"^(.*)\.%s$" % config.http_domain.replace(".", r"\.").encode()
             )
         else:
             self.http_host = self.http_port = False
@@ -199,12 +196,10 @@ class ProxyServer:
             raise web.HTTPForbidden()
 
         data = self.get_state_dict()
-        for key in filter(None, request.path.split("/")):
-            if isinstance(data, dict) and key in data:
-                data = data[key]
-            else:
-                data = {}
-                raise web.HTTPNotFound()
+        try:
+            data = utils.traverse_dict(data, *request.path.split("/"))
+        except KeyError as e:
+            raise web.HTTPNotFound() from e
 
         return web.json_response(data)
 

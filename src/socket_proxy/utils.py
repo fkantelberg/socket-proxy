@@ -278,6 +278,15 @@ def to_bool(val: Any) -> bool:
     return bool(val)
 
 
+def traverse_dict(data: dict, *keys: Tuple[str]) -> Any:
+    for key in filter(None, keys):
+        if isinstance(data, dict) and key in data:
+            data = data[key]
+        else:
+            raise KeyError()
+    return data
+
+
 def valid_file(path: str) -> str:
     """Check if a file exists and return the absolute path otherwise raise an
     error. This function is used for the argument parsing"""

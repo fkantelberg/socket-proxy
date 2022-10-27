@@ -153,6 +153,16 @@ def test_parse_network():
     assert len(utils.parse_networks(f"{a},{b}")) == 2
 
 
+def test_traverse_dict():
+    data = {"a": {"b": 42}}
+    assert utils.traverse_dict(data) == data
+    assert utils.traverse_dict(data, False, "", None) == data
+    assert utils.traverse_dict(data, "a") == {"b": 42}
+    assert utils.traverse_dict(data, "a", "b") == 42
+    with pytest.raises(KeyError):
+        utils.traverse_dict(data, "c")
+
+
 def test_valid_file():
     with pytest.raises(argparse.ArgumentTypeError):
         assert utils.valid_file(__file__ + "a")

@@ -125,6 +125,5 @@ config = argparse.Namespace(
     ping=False,
     ports=None,
     protocol=ProtocolType.TCP,
-    store_information=None,
     tunnel_host=None,
 )

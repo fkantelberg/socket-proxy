@@ -1,25 +1,13 @@
 import asyncio
-import ipaddress
 import ssl
 import subprocess
 import time
-from datetime import datetime
-from io import StringIO
 from unittest import mock
 
 import pytest
 from aiohttp import ClientSession
 
-from socket_proxy import (
-    Tunnel,
-    TunnelClient,
-    TunnelServer,
-    base,
-    connection,
-    package,
-    proxy,
-    utils,
-)
+from socket_proxy import Tunnel, TunnelClient, base, connection, package, proxy, utils
 
 CA_CERT = "pki/ca.pem"
 CLIENT_CERT = "pki/client.pem"
@@ -38,10 +26,6 @@ with subprocess.Popen(["./certs.sh", "server"], stdin=subprocess.PIPE) as proc:
 
 
 # pylint: disable=W0613
-
-
-def raiseAssert(*args, **kwargs):
-    raise AssertionError()
 
 
 def raiseAssertAsync(*args, **kwargs):
@@ -85,9 +69,11 @@ async def echo_server(event_loop):
 
     server = await asyncio.start_server(accept, host="", port=TCP_PORT_DUMMY)
     event_loop.create_task(loop(server))
+    await asyncio.sleep(0.1)
     yield server
     server.close()
     await server.wait_closed()
+    await asyncio.sleep(0.1)
 
 
 @pytest.fixture
@@ -129,6 +115,9 @@ async def client(event_loop):
 
 @pytest.fixture
 async def http_server(event_loop):
+    base.config.http_domain = "example.org"
+    base.config.http_listen = "127.0.0.1", base.DEFAULT_HTTP_PORT
+
     server = proxy.ProxyServer(
         host="",
         port=TCP_PORT,
@@ -136,8 +125,6 @@ async def http_server(event_loop):
         key=SERVER_KEY,
         ca=CA_CERT,
         crl=CRL,
-        http_domain="example.org",
-        http_listen=("127.0.0.1", base.DEFAULT_HTTP_PORT),
         protocols=[base.ProtocolType.HTTP],
     )
     Tunnel._interval = mock.AsyncMock()
@@ -150,6 +137,9 @@ async def http_server(event_loop):
 
 @pytest.fixture
 async def api_server(event_loop):
+    base.config.api = True
+    base.config.api_listen = "127.0.0.1", utils.get_unused_port(5000, 10000)
+
     server = proxy.ProxyServer(
         host="",
         port=TCP_PORT,
@@ -157,7 +147,6 @@ async def api_server(event_loop):
         key=SERVER_KEY,
         ca=CA_CERT,
         crl=CRL,
-        api_listen=("127.0.0.1", base.DEFAULT_API_PORT),
         protocols=[base.ProtocolType.TCP, base.ProtocolType.HTTP],
     )
     Tunnel._interval = mock.AsyncMock()
@@ -165,6 +154,28 @@ async def api_server(event_loop):
     await asyncio.sleep(0.1)
     yield server
     await server.stop()
+    await asyncio.sleep(0.1)
+
+
+@pytest.fixture
+async def api_client(event_loop):
+    base.config.api = True
+    base.config.api_listen = "127.0.0.1", utils.get_unused_port(5000, 10000)
+
+    client = TunnelClient(
+        host="localhost",
+        port=TCP_PORT,
+        dst_host="localhost",
+        dst_port=TCP_PORT_DUMMY,
+        cert=CLIENT_CERT,
+        key=CLIENT_KEY,
+        ca=CA_CERT,
+    )
+    Tunnel._interval = mock.AsyncMock()
+    event_loop.create_task(client.loop())
+    await asyncio.sleep(0.1)
+    yield client
+    await client.stop()
     await asyncio.sleep(0.1)
 
 
@@ -242,13 +253,6 @@ async def test_tunnel_with_dummy(echo_server, server, client):
             assert await connect_and_send("127.0.0.1", port, b"abc") == b"abc"
         elif ip_type == base.InternetType.IPv6:
             assert await connect_and_send("::1", port, b"abc") == b"abc"
-
-    # Write information into a file
-    with StringIO() as fp:
-        base.config.store_information = fp
-        client.store_information()
-        assert fp.tell()
-        base.config.store_information = None
 
     # Close the echo server
     echo_server.close()
@@ -427,115 +431,6 @@ async def test_tunnel_client():
     assert await client._handle() is False
 
 
-def init_test_server():
-    reader = writer = mock.AsyncMock()
-    reader.feed_eof = mock.MagicMock()
-    writer.close = mock.MagicMock()
-    writer.get_extra_info = mock.MagicMock()
-    writer.get_extra_info.return_value = ("127.0.0.1", TCP_PORT)
-
-    base.config.max_connects = 1
-    server = TunnelServer(reader, writer)
-    server.add = raiseAssert
-    return server, reader, writer
-
-
-@pytest.mark.asyncio
-async def test_tunnel_server():
-    server, reader, writer = init_test_server()
-
-    assert len(server.connections) == 0
-    with pytest.raises(AssertionError):
-        await server._client_accept(reader, writer)
-
-    assert len(server.connections) == 1
-    # Try again should cause a ban
-    await server._client_accept(reader, writer)
-
-    # Test connection from different ips
-    server.max_connects = 100
-    server.networks = [ipaddress.ip_network("127.0.1.0/24")]
-    await server._client_accept(reader, writer)
-
-    server.networks = [ipaddress.ip_network("127.0.0.0/24")]
-    with pytest.raises(AssertionError):
-        await server._client_accept(reader, writer)
-
-    server.networks = []
-
-    assert reader.feed_eof.call_count
-    assert writer.close.call_count and writer.wait_closed.called
-
-    # Test the cleaning of the bans
-    for ban in server.connections.values():
-        ban.first = datetime(1970, 1, 1)
-
-    await server.idle()
-    assert len(server.connections) == 0
-
-
-def init_test_server_tun():
-    server = init_test_server()[0]
-    token = b"\x00" * base.CLIENT_NAME_SIZE
-    m = server.clients[token] = mock.AsyncMock()
-    m.write = raiseAssert
-
-    tun = mock.AsyncMock()
-    server.tunnel.tun_read = tun
-    server.tunnel.write = mock.AsyncMock()
-    return server, tun
-
-
-@pytest.mark.asyncio
-async def test_tunnel_server_invalid_token():
-    server, tun = init_test_server_tun()
-    # Send a client data package with invalid token
-    tun.return_value = package.ClientDataPackage(b"abc", b"\xff")
-    assert await server._handle() is False
-
-
-@pytest.mark.asyncio
-async def test_tunnel_server_protocols():
-    server, tun = init_test_server_tun()
-    # Test if the filtering of protocols works
-    server.protocols = [base.ProtocolType.TCP]
-    tun.return_value = package.ConnectPackage(base.ProtocolType.TCP)
-    assert await server._handle() is True
-
-    server.protocols = []
-    tun.return_value = package.ConnectPackage(base.ProtocolType.TCP)
-    assert await server._handle() is False
-
-    server.protocols = [base.ProtocolType.HTTP]
-    tun.return_value = package.ConnectPackage(base.ProtocolType.HTTP)
-    assert await server._handle() is True
-
-
-@pytest.mark.asyncio
-async def test_tunnel_server_packages():
-    server, tun = init_test_server_tun()
-    # Test an invalid package
-    tun.return_value = package.Package()
-    assert await server._handle() is False
-
-    # Send a valid client data package
-    token = b"\x00" * base.CLIENT_NAME_SIZE
-    tun.return_value = package.ClientDataPackage(b"abc", token)
-    with pytest.raises(AssertionError):
-        await server._serve()
-
-
-@pytest.mark.asyncio
-async def test_tunnel_server_blocked_port():
-    server, tun = init_test_server_tun()
-    # Test a blocked port with impossible range
-    server.ports = (5000, 4000)
-    server.server = None
-    server.protocols = [base.ProtocolType.TCP]
-    tun.return_value = package.ConnectPackage(base.ProtocolType.TCP)
-    assert await server._handle() is False
-
-
 @pytest.mark.asyncio
 async def test_tunnel_ping(server, client):
     # No ping when disabled
@@ -579,27 +474,96 @@ async def test_tunnel_ping(server, client):
 
 
 @pytest.mark.asyncio
-async def test_api_proxy(api_server, client, http_client):
+async def test_api_client(echo_server, api_server, api_client, http_client):
     async def connect_and_send(ip, port):
+        # Open a connection to get a client
+        reader, writer = await asyncio.open_connection(ip, port)
+        await asyncio.sleep(0.1)
+        writer.write(b"hello")
+        await writer.drain()
+
+        # Get the client UUID
+        async with session.get("/", headers=headers) as response:
+            data = await response.json()
+            clients = data["clients"]
+            assert clients
+            cuuid = list(clients)[0]
+
+        # Delete the client using the client API
+        async with session.delete(f"/{cuuid}", headers=headers) as response:
+            assert response.status == 200
+
+        # Client already deleted
+        async with session.delete(f"/{cuuid}", headers=headers) as response:
+            assert response.status == 404
+
+        await reader.read(1024)
+
+    # Testing of the client API
+    async with ClientSession(f"http://localhost:{api_client.api_port}") as session:
+        async with session.get("/") as response:
+            assert response.status == 200
+            assert await response.json() == api_client.get_state_dict(True)
+
+        async with session.get("/invalid") as response:
+            assert response.status == 404
+
+        async with session.get("/tcp") as response:
+            assert response.status == 200
+            assert await response.json() == api_client.get_state_dict(True)["tcp"]
+
+        # Activate API token
+        api_client.api_token = "Bearer abcd"
+        headers = {"Authorization": "Bearer abcd"}
+        async with session.get("/") as response:
+            assert response.status == 403
+
+        async with session.delete("/") as response:
+            assert response.status == 403
+
+        async with session.get("/", headers=headers) as response:
+            assert response.status == 200
+
+        async with session.delete("/", headers=headers) as response:
+            assert response.status == 404
+
+        async with session.delete("/invalid", headers=headers) as response:
+            assert response.status == 404
+
+        for ip_type, port in api_client.addresses:
+            if ip_type == base.InternetType.IPv4:
+                await connect_and_send("127.0.0.1", port)
+            elif ip_type == base.InternetType.IPv6:
+                await connect_and_send("::1", port)
+
+
+@pytest.mark.asyncio
+async def test_api_server(echo_server, api_server, api_client, http_client):
+    async def connect_and_send(ip, port):
+        # Open a connection to get a client
         reader, writer = await asyncio.open_connection(ip, port)
         writer.write(b"hello")
         await writer.drain()
 
+        # Get the client UUID
         async with session.get("/", headers=headers) as response:
             data = await response.json()
             clients = data["tunnels"][tuuid]["clients"]
             assert clients
             cuuid = list(clients)[0]
 
+        # Delete the client using the server API
         async with session.delete(f"/{tuuid}/{cuuid}", headers=headers) as response:
             assert response.status == 200
 
+        # Client already deleted
         async with session.delete(f"/{tuuid}/{cuuid}", headers=headers) as response:
             assert response.status == 404
 
         await reader.read(1024)
 
-    async with ClientSession(f"http://localhost:{base.DEFAULT_API_PORT}") as session:
+    # Testing of the server API
+    async with ClientSession(f"http://localhost:{api_server.api_port}") as session:
         async with session.get("/") as response:
             assert response.status == 200
             data = await response.json()
@@ -613,23 +577,29 @@ async def test_api_proxy(api_server, client, http_client):
         async with session.get("/invalid") as response:
             assert response.status == 404
 
+        # Activate API token
         api_server.api_token = "Bearer abcd"
+        headers = {"Authorization": "Bearer abcd"}
+        tuuid = api_client.uuid
         async with session.get("/") as response:
             assert response.status == 403
 
-        headers = {"Authorization": "Bearer abcd"}
-        tuuid = client.uuid
+        async with session.delete("/") as response:
+            assert response.status == 403
+
         async with session.get("/", headers=headers) as response:
             assert response.status == 200
 
-        for ip_type, port in client.addresses:
+        for ip_type, port in api_client.addresses:
             if ip_type == base.InternetType.IPv4:
                 await connect_and_send("127.0.0.1", port)
             elif ip_type == base.InternetType.IPv6:
                 await connect_and_send("::1", port)
 
+        # Disconnect the tunnel using the API
         async with session.delete(f"/{tuuid}", headers=headers) as response:
             assert response.status == 200
 
+        # Tunnel already disconnected
         async with session.delete(f"/{tuuid}", headers=headers) as response:
             assert response.status == 404

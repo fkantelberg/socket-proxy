@@ -2,9 +2,9 @@ import asyncio
 import logging
 import time
 from datetime import datetime
-from typing import List
 
 from . import base, package, utils
+from .base import config
 from .connection import Connection
 
 _logger = logging.getLogger(__name__)
@@ -19,7 +19,6 @@ class Tunnel:
         domain: str = "",
         protocol: base.ProtocolType = base.ProtocolType.TCP,
         chunk_size: int = 65536,
-        networks: List[base.IPvXNetwork] = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -32,11 +31,11 @@ class Tunnel:
         self.clients = {}
 
         self.chunk_size = chunk_size
-        self.bantime = base.config.ban_time
-        self.max_clients = base.config.max_clients
-        self.max_connects = base.config.max_connects
-        self.idle_timeout = base.config.idle_timeout
-        self.networks = networks or []
+        self.bantime = config.ban_time
+        self.max_clients = config.max_clients
+        self.max_connects = config.max_connects
+        self.idle_timeout = config.idle_timeout
+        self.networks = config.networks or []
 
         # Total bytes in/out for lost connections
         self.bytes_in = self.bytes_out = 0
@@ -157,7 +156,7 @@ class Tunnel:
             await self.idle()
             await asyncio.sleep(base.INTERVAL_TIME)
 
-    def get_state_dict(self) -> dict:
+    def get_state_dict(self, is_client: bool = False) -> dict:
         """Generate a dictionary which shows the current state of the tunnel"""
         tcp, http = [], {}
         if self.protocol == base.ProtocolType.TCP:
@@ -180,13 +179,15 @@ class Tunnel:
                 },
             }
 
+        tun = {"host": self.host, "port": self.port}
         return {
-            "client": {"host": self.host, "port": self.port},
+            "client": tun if not is_client else {},
             "clients": clients,
             "config": self.get_config_dict(),
             "create_date": self.create_date.isoformat(" "),
             "http": http,
             "protocol": str(self.protocol),
+            "server": tun if is_client else {},
             "tcp": tcp,
             "traffic": {
                 "bytes_in": bytes_in,
