@@ -580,26 +580,56 @@ async def test_tunnel_ping(server, client):
 
 @pytest.mark.asyncio
 async def test_api_proxy(api_server, client, http_client):
+    async def connect_and_send(ip, port):
+        reader, writer = await asyncio.open_connection(ip, port)
+        writer.write(b"hello")
+        await writer.drain()
+
+        async with session.get("/", headers=headers) as response:
+            data = await response.json()
+            clients = data["tunnels"][tuuid]["clients"]
+            assert clients
+            cuuid = list(clients)[0]
+
+        async with session.delete(f"/{tuuid}/{cuuid}", headers=headers) as response:
+            assert response.status == 200
+
+        async with session.delete(f"/{tuuid}/{cuuid}", headers=headers) as response:
+            assert response.status == 404
+
+        await reader.read(1024)
+
     async with ClientSession(f"http://localhost:{base.DEFAULT_API_PORT}") as session:
         async with session.get("/") as response:
             assert response.status == 200
             data = await response.json()
-            assert data == api_server._build_state()
+            assert data == api_server.get_state_dict()
             assert len(data["tunnels"]) == 2
 
         async with session.get("/tcp") as response:
             assert response.status == 200
-            data = await response.json()
-            assert data == api_server._build_state()["tcp"]
+            assert await response.json() == api_server.get_state_dict()["tcp"]
 
         async with session.get("/invalid") as response:
-            assert response.status == 200
-            assert await response.json() == {}
+            assert response.status == 404
 
         api_server.api_token = "Bearer abcd"
         async with session.get("/") as response:
             assert response.status == 403
 
         headers = {"Authorization": "Bearer abcd"}
+        tuuid = client.uuid
         async with session.get("/", headers=headers) as response:
             assert response.status == 200
+
+        for ip_type, port in client.addresses:
+            if ip_type == base.InternetType.IPv4:
+                await connect_and_send("127.0.0.1", port)
+            elif ip_type == base.InternetType.IPv6:
+                await connect_and_send("::1", port)
+
+        async with session.delete(f"/{tuuid}", headers=headers) as response:
+            assert response.status == 200
+
+        async with session.delete(f"/{tuuid}", headers=headers) as response:
+            assert response.status == 404

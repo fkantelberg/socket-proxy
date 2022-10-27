@@ -23,19 +23,24 @@ class Tunnel:
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.create_date = datetime.now()
+        self.host = self.port = None
+        self.addr = []
         self.tunnel = None
-        self.clients = {}
         self.protocol = protocol
         self.domain = domain or ""
+
+        self.clients = {}
+
         self.chunk_size = chunk_size
         self.bantime = base.config.ban_time
         self.max_clients = base.config.max_clients
         self.max_connects = base.config.max_connects
         self.idle_timeout = base.config.idle_timeout
         self.networks = networks or []
+
         # Total bytes in/out for lost connections
         self.bytes_in = self.bytes_out = 0
+        self.create_date = datetime.now()
 
     def __contains__(self, token: bytes) -> bool:
         return token in self.clients
@@ -103,6 +108,7 @@ class Tunnel:
         """Disconnect a client"""
         client = self.pop(token)
         if client:
+            # Store the traffic information from the disconnecting clients
             self.bytes_in += client.bytes_in
             self.bytes_out += client.bytes_out
             _logger.info("Client %s disconnected", token.hex())
@@ -150,3 +156,40 @@ class Tunnel:
         while True:
             await self.idle()
             await asyncio.sleep(base.INTERVAL_TIME)
+
+    def get_state_dict(self) -> dict:
+        """Generate a dictionary which shows the current state of the tunnel"""
+        tcp, http = [], {}
+        if self.protocol == base.ProtocolType.TCP:
+            tcp = [{"host": host, "port": port} for host, port in self.addr]
+        elif self.protocol == base.ProtocolType.HTTP:
+            http = {"domain": self.domain}
+
+        clients = {}
+        bytes_in, bytes_out = self.bytes_in, self.bytes_out
+        for cli in self.clients.values():
+            bytes_in += cli.bytes_in
+            bytes_out += cli.bytes_out
+
+            clients[cli.uuid] = {
+                "create_date": cli.create_date.isoformat(" "),
+                "protocol": str(cli.protocol),
+                "traffic": {
+                    "bytes_in": cli.bytes_in,
+                    "bytes_out": cli.bytes_out,
+                },
+            }
+
+        return {
+            "client": {"host": self.host, "port": self.port},
+            "clients": clients,
+            "config": self.get_config_dict(),
+            "create_date": self.create_date.isoformat(" "),
+            "http": http,
+            "protocol": str(self.protocol),
+            "tcp": tcp,
+            "traffic": {
+                "bytes_in": bytes_in,
+                "bytes_out": bytes_out,
+            },
+        }

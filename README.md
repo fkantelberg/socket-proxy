@@ -26,6 +26,7 @@ like nginx with SSL and a wildcard certificate if HTTPS is required.
 - Limitation of number of tunnels, clients per tunnel, and connections per IP
 - Limit the access to specific IP's
 - Configuration on server and client side and negotiation of the used settings
+- Web API with support of bearer authentication
 
 ### Usage
 
@@ -42,3 +43,13 @@ $ socket_proxy client --ca ca.pem -c SERVER -d TARGET:PORT
 ```
 
 4. Connect clients to the opened ports on the server
+
+### Web API
+
+`GET /` returns the state of the server as JSON dictionary. Use the path to get only specific information.
+E.g. `/tunnels` only returns the sub-dictionary `tunnels` and `/tunnels/edcb13dc0c7c6c64` returns only
+information about the tunnel `edcb13dc0c7c6c64`.
+
+`DELETE /<tunnel>/<client>` disconnects the client `<client>` of the tunnel `<tunnel>`.
+
+`DELETE /<tunnel>` disconnects the tunnel `<tunnel>`.

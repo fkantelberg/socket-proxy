@@ -32,7 +32,6 @@ class TunnelServer(tunnel.Tunnel):
         self.host, self.port = writer.get_extra_info("peername")[:2]
         self.tunnel_host = tunnel_host.split(",") if tunnel_host else ""
         self.tunnel_port = None
-        self.addr = []
         self.ports = ports
         self.server = None
         self.connections = collections.defaultdict(base.Ban)

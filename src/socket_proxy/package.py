@@ -132,6 +132,7 @@ class PingPackage(Package):
 
     _name = "ping"
     _type = 0x02
+    __slots__ = ("time",)
 
     TIMESTAMP = PackageStruct("!d")
 

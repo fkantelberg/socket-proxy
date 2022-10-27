@@ -9,8 +9,9 @@ from .tunnel_server import TunnelServer
 
 try:
     from aiohttp import web
+    from aiohttp.web import Request, Response
 except ImportError:
-    web = None
+    web = Request = Response = None
 
 _logger = logging.getLogger(__name__)
 
@@ -171,27 +172,11 @@ class ProxyServer:
         async with self.server:
             await self.server.serve_forever()
 
-    def _build_state(self) -> None:
+    def get_state_dict(self) -> dict:
+        """Generate a dictionary which shows the current state of the server"""
         tunnels = {}
         for tuuid, tunnel in self.tunnels.items():
-            tcp = http = {}
-            if tunnel.protocol == base.ProtocolType.TCP:
-                tcp = [{"host": host, "port": port} for host, port in tunnel.addr]
-            elif tunnel.protocol == base.ProtocolType.HTTP:
-                http = {"domain": tunnel.domain}
-
-            tunnels[tuuid] = {
-                "client": {"host": tunnel.host, "port": tunnel.port},
-                "config": tunnel.get_config_dict(),
-                "create_date": tunnel.create_date.isoformat(" "),
-                "traffic": {
-                    "bytes_in": tunnel.bytes_in,
-                    "bytes_out": tunnel.bytes_out,
-                },
-                "protocol": str(tunnel.protocol),
-                "http": http,
-                "tcp": tcp,
-            }
+            tunnels[tuuid] = tunnel.get_state_dict()
 
         http = {
             "domain": self.http_domain,
@@ -200,28 +185,49 @@ class ProxyServer:
         }
 
         return {
+            "http": http if self.http_domain else {},
             "tcp": {
                 "host": self.host,
                 "port": self.port,
             },
-            "http": http if self.http_domain else {},
             "tunnels": tunnels,
         }
 
-    async def _api_index(self, request: web.Request) -> web.Response:
+    async def _api_index(self, request: Request) -> Response:
         """Response with the internal server state"""
         if self.api_token and self.api_token != request.headers.get("Authorization"):
             raise web.HTTPForbidden()
 
-        data = self._build_state()
+        data = self.get_state_dict()
         for key in filter(None, request.path.split("/")):
             if isinstance(data, dict) and key in data:
                 data = data[key]
             else:
                 data = {}
-                break
+                raise web.HTTPNotFound()
 
         return web.json_response(data)
+
+    async def _api_delete(self, request: Request) -> Response:
+        """Disconnect a specific tunnel or client"""
+        if self.api_token and self.api_token != request.headers.get("Authorization"):
+            raise web.HTTPForbidden()
+
+        keys = list(filter(None, request.path.split("/")))
+        if len(keys) < 1 or keys[0] not in self.tunnels:
+            raise web.HTTPNotFound()
+
+        tunnel = self.tunnels[keys[0]]
+        if len(keys) == 1:
+            await tunnel.stop()
+            raise web.HTTPOk()
+
+        for ctoken, cli in tunnel.clients.items():
+            if cli.uuid == keys[1]:
+                await tunnel._disconnect_client(ctoken)
+                raise web.HTTPOk()
+
+        raise web.HTTPNotFound()
 
     async def _start_api(self) -> None:
         """Start the API"""
@@ -234,7 +240,12 @@ class ProxyServer:
 
         _logger.info("Starting API on %s:%s %s", self.api_host, self.api_port, extras)
         self.api = web.Application()
-        self.api.add_routes([web.get(r"/{name:.*}", self._api_index)])
+        self.api.add_routes(
+            [
+                web.get(r"/{name:.*}", self._api_index),
+                web.delete(r"/{name:.*}", self._api_delete),
+            ]
+        )
 
         await web._run_app(
             self.api,

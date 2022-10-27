@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import time
+from datetime import datetime
 from typing import TypeVar
 
 from . import base, package
@@ -24,6 +25,7 @@ class Connection:
         self.protocol = protocol
         self.token = token or b""
         self.bytes_in = self.bytes_out = 0
+        self.create_date = datetime.now()
         self.last_time = time.time()
 
     @property
