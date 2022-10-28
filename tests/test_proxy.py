@@ -116,7 +116,7 @@ async def client(event_loop):
 @pytest.fixture
 async def http_server(event_loop):
     base.config.http_domain = "example.org"
-    base.config.http_listen = "127.0.0.1", base.DEFAULT_HTTP_PORT
+    base.config.http_listen = "127.0.0.1", utils.get_unused_port(5000, 10000)
 
     server = proxy.ProxyServer(
         host="",
@@ -139,6 +139,7 @@ async def http_server(event_loop):
 async def api_server(event_loop):
     base.config.api = True
     base.config.api_listen = "127.0.0.1", utils.get_unused_port(5000, 10000)
+    base.config.http_listen = "127.0.0.1", utils.get_unused_port(5000, 10000)
 
     server = proxy.ProxyServer(
         host="",
@@ -161,6 +162,7 @@ async def api_server(event_loop):
 async def api_client(event_loop):
     base.config.api = True
     base.config.api_listen = "127.0.0.1", utils.get_unused_port(5000, 10000)
+    base.config.http_listen = "127.0.0.1", utils.get_unused_port(5000, 10000)
 
     client = TunnelClient(
         host="localhost",
@@ -247,8 +249,8 @@ async def test_tunnel_with_dummy(echo_server, server, client):
 
     # End to end test with an echo server
     await asyncio.sleep(0.1)
-    assert client.addresses
-    for ip_type, port in client.addresses:
+    assert client.addr
+    for ip_type, port in client.addr:
         if ip_type == base.InternetType.IPv4:
             assert await connect_and_send("127.0.0.1", port, b"abc") == b"abc"
         elif ip_type == base.InternetType.IPv6:
@@ -260,7 +262,7 @@ async def test_tunnel_with_dummy(echo_server, server, client):
 
     await asyncio.sleep(0.1)
 
-    for ip_type, port in client.addresses:
+    for ip_type, port in client.addr:
         if ip_type == base.InternetType.IPv4:
             assert await connect_and_send("127.0.0.1", port, b"abc") == b""
         elif ip_type == base.InternetType.IPv6:
@@ -275,7 +277,7 @@ async def test_http_tunnel_with_dummy(echo_server, http_server, http_client):
     async def connect_and_send(text):
         reader, writer = await asyncio.open_connection(
             "127.0.0.1",
-            base.DEFAULT_HTTP_PORT,
+            http_server.http_port,
         )
         writer.write(text)
         await writer.drain()
@@ -503,14 +505,14 @@ async def test_api_client(echo_server, api_server, api_client, http_client):
     async with ClientSession(f"http://localhost:{api_client.api_port}") as session:
         async with session.get("/") as response:
             assert response.status == 200
-            assert await response.json() == api_client.get_state_dict(True)
+            assert await response.json() == api_client.get_state_dict()
 
         async with session.get("/invalid") as response:
             assert response.status == 404
 
         async with session.get("/tcp") as response:
             assert response.status == 200
-            assert await response.json() == api_client.get_state_dict(True)["tcp"]
+            assert await response.json() == api_client.get_state_dict()["tcp"]
 
         # Activate API token
         api_client.api_token = "Bearer abcd"
@@ -530,7 +532,7 @@ async def test_api_client(echo_server, api_server, api_client, http_client):
         async with session.delete("/invalid", headers=headers) as response:
             assert response.status == 404
 
-        for ip_type, port in api_client.addresses:
+        for ip_type, port in api_client.addr:
             if ip_type == base.InternetType.IPv4:
                 await connect_and_send("127.0.0.1", port)
             elif ip_type == base.InternetType.IPv6:
@@ -590,7 +592,7 @@ async def test_api_server(echo_server, api_server, api_client, http_client):
         async with session.get("/", headers=headers) as response:
             assert response.status == 200
 
-        for ip_type, port in api_client.addresses:
+        for ip_type, port in api_client.addr:
             if ip_type == base.InternetType.IPv4:
                 await connect_and_send("127.0.0.1", port)
             elif ip_type == base.InternetType.IPv6:

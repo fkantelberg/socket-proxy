@@ -4,7 +4,7 @@ import queue
 from logging.handlers import QueueHandler
 from typing import List
 
-from .base import LOG_FORMAT
+from .base import LOG_FORMAT, InternetType
 from .tunnel_client import TunnelClient
 from .utils import format_transfer
 
@@ -54,16 +54,20 @@ class GUIClient(TunnelClient):
         else:
             ping_time = "-"
 
-        self._draw_lines(
-            win,
+        addr = [(InternetType.from_ip(ip), ip, port) for ip, port in self.addr]
+        lines = [f"Listen on {self.fmt_port(*a)}" for a in sorted(addr[:2])]
+        lines.extend(
             [
+                "-" * (win.getmaxyx()[1] - 4),
                 f"Clients: {len(self.clients)}",
                 f"Domain: {self.domain or 'off'}",
                 f"Ping: {ping_time}",
                 f"Transfer In: {format_transfer(bytes_out)}",
                 f"Transfer Out: {format_transfer(bytes_in)}",
-            ],
+            ]
         )
+
+        self._draw_lines(win, lines)
         win.refresh()
         return win
 

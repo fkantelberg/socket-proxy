@@ -6,15 +6,10 @@ import sys
 from configparser import ConfigParser
 from typing import Tuple
 
-from . import base, utils
+from . import api, base, utils
 from .proxy import ProxyServer
 from .tunnel_client import TunnelClient
 from .tunnel_gui import GUIClient
-
-try:
-    from aiohttp import web
-except ImportError:
-    web = None
 
 _logger = logging.getLogger(__name__)
 
@@ -184,7 +179,7 @@ def connection_group(parser: argparse.ArgumentParser, server: bool) -> None:
             help="Select the protocol to be used. (default: tcp)",
         )
 
-    if web:
+    if api.web:
         group.add_argument(
             "--api",
             default=False,

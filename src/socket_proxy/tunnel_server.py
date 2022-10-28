@@ -34,7 +34,7 @@ class TunnelServer(tunnel.Tunnel):
         self.tunnel_port = None
         self.ports = ports
         self.server = None
-        self.connections = collections.defaultdict(base.Ban)
+        self.connections = collections.defaultdict(utils.Ban)
         self.protocols = protocols or utils.protocols()
 
     def block(self, ip: base.IPvXAddress) -> bool:
@@ -133,7 +133,7 @@ class TunnelServer(tunnel.Tunnel):
         out = " ".join(sorted(f"{host}:{port}" for host, port in self.addr))
         self.info("Listen on %s", out)
 
-        addr = [(base.InternetType.from_ip(ip), port) for ip, port in self.addr]
+        addr = [(base.InternetType.from_ip(ip), ip, port) for ip, port in self.addr]
         pkg = package.InitPackage(self.token, addr, self.domain)
         await self.tunnel.tun_write(pkg)
 

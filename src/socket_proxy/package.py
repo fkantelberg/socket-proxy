@@ -179,8 +179,11 @@ class InitPackage(Package):
 
     def to_bytes(self) -> bytes:
         data = super().to_bytes() + self.INIT.pack(self.token, len(self.addresses))
-        for address in self.addresses:
-            data += self.ADDRESS.pack(*address)
+        for ip_type, ip, port in self.addresses:
+            if isinstance(ip, str):
+                ip = ipaddress.ip_address(ip)
+
+            data += self.ADDRESS.pack(ip_type, port) + ip.packed
         return data + PackageStruct.pack_string(self.domain)
 
     @classmethod
@@ -190,7 +193,15 @@ class InitPackage(Package):
         addresses = []
         for _ in range(length):
             ip_type, port = await cls.ADDRESS.read(reader)
-            addresses.append((base.InternetType(ip_type), port))
+            ip_type = base.InternetType(ip_type)
+            if ip_type == base.InternetType.IPv4:
+                ip = await reader.readexactly(4)
+            elif ip_type == base.InternetType.IPv6:
+                ip = await reader.readexactly(16)
+            else:
+                continue
+
+            addresses.append((ipaddress.ip_address(ip), port))
 
         domain = await PackageStruct.read_string(reader)
         return (token, addresses, domain) + res

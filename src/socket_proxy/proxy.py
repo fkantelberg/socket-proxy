@@ -2,24 +2,17 @@ import asyncio
 import logging
 import re
 from asyncio import StreamReader, StreamWriter
-from typing import List, Union
+from typing import List, Tuple, Union
 
-from . import base, utils
-from .base import config
+from . import api, base, utils
 from .tunnel_server import TunnelServer
-
-try:
-    from aiohttp import web
-    from aiohttp.web import Request, Response
-except ImportError:
-    web = Request = Response = None
 
 _logger = logging.getLogger(__name__)
 
 HTTPRequestStatus = re.compile(rb"^(\S+)\s+(\S+)\s+(\S+)$")
 
 
-class ProxyServer:
+class ProxyServer(api.APIMixin):
     """Main proxy server which creates a TLS socket and listens for clients.
     If clients connect the server will start a TunnelServer"""
 
@@ -33,10 +26,11 @@ class ProxyServer:
         crl: str = None,
         **kwargs,
     ):
+        super().__init__(api_type=api.APIType.Server)
         self.kwargs = kwargs
         self.host, self.port = host, port
-        self.max_tunnels = config.max_tunnels
-        self.http_ssl = config.http_ssl
+        self.max_tunnels = base.config.max_tunnels
+        self.http_ssl = base.config.http_ssl
         self.tunnels = {}
         self.sc = utils.generate_ssl_context(
             cert=cert,
@@ -45,22 +39,13 @@ class ProxyServer:
             crl=crl,
             server=True,
         )
+        self.http_proxy = self.server = None
 
-        self.api = self.http_proxy = self.server = None
-
-        self.api_ssl = config.api_ssl
-        self.api_token = f"Bearer {config.api_token}" if config.api_token else None
-        api_listen = config.api_listen if config.api else None
-        if api_listen:
-            self.api_host, self.api_port = api_listen
-        else:
-            self.api_host = self.api_port = False
-
-        if isinstance(config.http_domain, str) and config.http_listen:
-            self.http_host, self.http_port = config.http_listen
-            self.http_domain = config.http_domain
+        if isinstance(base.config.http_domain, str) and base.config.http_listen:
+            self.http_host, self.http_port = base.config.http_listen
+            self.http_domain = base.config.http_domain
             self.http_domain_regex = re.compile(
-                rb"^(.*)\.%s$" % config.http_domain.replace(".", r"\.").encode()
+                rb"^(.*)\.%s$" % self.http_domain.replace(".", r"\.").encode()
             )
         else:
             self.http_host = self.http_port = False
@@ -154,7 +139,7 @@ class ProxyServer:
             asyncio.create_task(self.http_loop())
 
         if self.api_port:
-            asyncio.create_task(self._start_api())
+            asyncio.create_task(self.start_api())
 
         self.server = await asyncio.start_server(
             self._accept,
@@ -190,66 +175,22 @@ class ProxyServer:
             "tunnels": tunnels,
         }
 
-    async def _api_index(self, request: Request) -> Response:
-        """Response with the internal server state"""
-        if self.api_token and self.api_token != request.headers.get("Authorization"):
-            raise web.HTTPForbidden()
-
-        data = self.get_state_dict()
-        try:
-            data = utils.traverse_dict(data, *request.path.split("/"))
-        except KeyError as e:
-            raise web.HTTPNotFound() from e
-
-        return web.json_response(data)
-
-    async def _api_delete(self, request: Request) -> Response:
+    async def disconnect(self, *uuids: Tuple[str]) -> bool:
         """Disconnect a specific tunnel or client"""
-        if self.api_token and self.api_token != request.headers.get("Authorization"):
-            raise web.HTTPForbidden()
+        if len(uuids) < 1 or uuids[0] not in self.tunnels:
+            return False
 
-        keys = list(filter(None, request.path.split("/")))
-        if len(keys) < 1 or keys[0] not in self.tunnels:
-            raise web.HTTPNotFound()
-
-        tunnel = self.tunnels[keys[0]]
-        if len(keys) == 1:
+        tunnel = self.tunnels[uuids[0]]
+        if len(uuids) == 1:
             await tunnel.stop()
-            raise web.HTTPOk()
+            return True
 
         for ctoken, cli in tunnel.clients.items():
-            if cli.uuid == keys[1]:
+            if cli.uuid == uuids[1]:
                 await tunnel._disconnect_client(ctoken)
-                raise web.HTTPOk()
+                return True
 
-        raise web.HTTPNotFound()
-
-    async def _start_api(self) -> None:
-        """Start the API"""
-        extras = [
-            "tls" if self.api_ssl else "",
-            "token" if self.api_token else "",
-        ]
-        extras = sorted(filter(None, extras))
-        extras = f"[{','.join(extras)}]" if extras else ""
-
-        _logger.info("Starting API on %s:%s %s", self.api_host, self.api_port, extras)
-        self.api = web.Application()
-        self.api.add_routes(
-            [
-                web.get(r"/{name:.*}", self._api_index),
-                web.delete(r"/{name:.*}", self._api_delete),
-            ]
-        )
-
-        await web._run_app(
-            self.api,
-            host=self.api_host,
-            port=self.api_port,
-            access_log_format='%a "%r" %s %b "%{Referer}i" "%{User-Agent}i"',
-            print=None,
-            ssl_context=self.sc if self.api_ssl else None,
-        )
+        return False
 
     def start(self) -> None:
         """Start the server and event loop"""

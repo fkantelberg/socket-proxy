@@ -4,7 +4,6 @@ import time
 from datetime import datetime
 
 from . import base, package, utils
-from .base import config
 from .connection import Connection
 
 _logger = logging.getLogger(__name__)
@@ -31,11 +30,11 @@ class Tunnel:
         self.clients = {}
 
         self.chunk_size = chunk_size
-        self.bantime = config.ban_time
-        self.max_clients = config.max_clients
-        self.max_connects = config.max_connects
-        self.idle_timeout = config.idle_timeout
-        self.networks = config.networks or []
+        self.bantime = base.config.ban_time
+        self.max_clients = base.config.max_clients
+        self.max_connects = base.config.max_connects
+        self.idle_timeout = base.config.idle_timeout
+        self.networks = base.config.networks or []
 
         # Total bytes in/out for lost connections
         self.bytes_in = self.bytes_out = 0
@@ -64,6 +63,44 @@ class Tunnel:
             "max_clients": self.max_clients or None,
             "max_connects": self.max_connects or None,
             "networks": list(map(str, self.networks)) or None,
+        }
+
+    def get_state_dict(self) -> dict:
+        """Generate a dictionary which shows the current state of the tunnel"""
+        tcp, http = [], {}
+        if self.protocol == base.ProtocolType.TCP:
+            tcp = [{"host": str(host), "port": port} for host, port in self.addr]
+        elif self.protocol == base.ProtocolType.HTTP:
+            http = {"domain": self.domain}
+
+        clients = {}
+        bytes_in, bytes_out = self.bytes_in, self.bytes_out
+        for cli in self.clients.values():
+            bytes_in += cli.bytes_in
+            bytes_out += cli.bytes_out
+
+            clients[cli.uuid] = {
+                "create_date": cli.create_date.isoformat(" "),
+                "protocol": str(cli.protocol),
+                "traffic": {
+                    "bytes_in": cli.bytes_in,
+                    "bytes_out": cli.bytes_out,
+                },
+            }
+
+        tun = {"host": self.host, "port": self.port}
+        return {
+            "address": tun,
+            "clients": clients,
+            "config": self.get_config_dict(),
+            "create_date": self.create_date.isoformat(" "),
+            "http": http,
+            "protocol": str(self.protocol),
+            "tcp": tcp,
+            "traffic": {
+                "bytes_in": bytes_in,
+                "bytes_out": bytes_out,
+            },
         }
 
     def info(self, msg: str, *args) -> None:
@@ -155,42 +192,3 @@ class Tunnel:
         while True:
             await self.idle()
             await asyncio.sleep(base.INTERVAL_TIME)
-
-    def get_state_dict(self, is_client: bool = False) -> dict:
-        """Generate a dictionary which shows the current state of the tunnel"""
-        tcp, http = [], {}
-        if self.protocol == base.ProtocolType.TCP:
-            tcp = [{"host": host, "port": port} for host, port in self.addr]
-        elif self.protocol == base.ProtocolType.HTTP:
-            http = {"domain": self.domain}
-
-        clients = {}
-        bytes_in, bytes_out = self.bytes_in, self.bytes_out
-        for cli in self.clients.values():
-            bytes_in += cli.bytes_in
-            bytes_out += cli.bytes_out
-
-            clients[cli.uuid] = {
-                "create_date": cli.create_date.isoformat(" "),
-                "protocol": str(cli.protocol),
-                "traffic": {
-                    "bytes_in": cli.bytes_in,
-                    "bytes_out": cli.bytes_out,
-                },
-            }
-
-        tun = {"host": self.host, "port": self.port}
-        return {
-            "client": tun if not is_client else {},
-            "clients": clients,
-            "config": self.get_config_dict(),
-            "create_date": self.create_date.isoformat(" "),
-            "http": http,
-            "protocol": str(self.protocol),
-            "server": tun if is_client else {},
-            "tcp": tcp,
-            "traffic": {
-                "bytes_in": bytes_in,
-                "bytes_out": bytes_out,
-            },
-        }

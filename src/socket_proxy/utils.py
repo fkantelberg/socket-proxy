@@ -8,6 +8,7 @@ import secrets
 import socket
 import ssl
 import sys
+from datetime import datetime
 from random import shuffle
 from typing import Any, List, Set, Tuple, Union
 from urllib.parse import urlsplit
@@ -59,6 +60,16 @@ class ConfigArgumentParser(argparse.ArgumentParser):
                 args.extend((action.option_strings[0], str(value)))
 
         return self.parse_args(args)
+
+
+class Ban:
+    """Helper class for bans"""
+
+    __slots__ = ("first", "hits")
+
+    def __init__(self):
+        self.hits = 0
+        self.first = datetime.now()
 
 
 def configure_logging(log_file: str, level: str) -> None:

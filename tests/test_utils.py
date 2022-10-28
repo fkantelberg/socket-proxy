@@ -20,7 +20,7 @@ def test_transport_type():
 
 
 def test_ban():
-    ban = base.Ban()
+    ban = utils.Ban()
     assert ban.hits == 0
 
 

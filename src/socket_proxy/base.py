@@ -3,7 +3,6 @@ import enum
 import ipaddress
 import logging
 import os
-from datetime import datetime
 from typing import TypeVar, Union
 
 _logger = logging.getLogger(__name__)
@@ -82,16 +81,6 @@ class ProtocolType(enum.IntEnum):
         if protocol.upper() == "HTTP":
             return ProtocolType.HTTP
         raise ValueError("Invalid protocol")
-
-
-class Ban:
-    """Helper class for bans"""
-
-    __slots__ = ("first", "hits")
-
-    def __init__(self):
-        self.hits = 0
-        self.first = datetime.now()
 
 
 config = argparse.Namespace(
