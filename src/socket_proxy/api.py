@@ -1,6 +1,6 @@
 import enum
 import logging
-from typing import Tuple
+from typing import Any, Tuple
 
 from . import base, utils
 
@@ -33,14 +33,26 @@ class APIMixin:
     async def disconnect(self, *uuids: Tuple[str]) -> bool:
         """Handle the disconnect over the API"""
 
+    # pylint: disable=W0613
+    async def _api_handle(self, path: Tuple[str], request: Request) -> Any:
+        """Handle api functions"""
+        return None
+
     async def _api_index(self, request: Request) -> Response:
         """Response with the internal server state"""
         if self.api_token and self.api_token != request.headers.get("Authorization"):
             raise web.HTTPForbidden()
 
+        path = tuple(filter(None, request.path.split("/")))
+        if "api" in path[:1]:
+            data = await self._api_handle(path[1:], request)
+            if data is not None:
+                return web.json_response(data)
+            raise web.HTTPNotFound()
+
         data = self.get_state_dict()
         try:
-            data = utils.traverse_dict(data, *request.path.split("/"))
+            data = utils.traverse_dict(data, *path)
         except KeyError as e:
             raise web.HTTPNotFound() from e
 

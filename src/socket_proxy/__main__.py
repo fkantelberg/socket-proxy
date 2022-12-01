@@ -114,6 +114,12 @@ def connection_group(parser: argparse.ArgumentParser, server: bool) -> None:
             f"the server will listen on port {base.DEFAULT_PORT}.",
         )
         group.add_argument(
+            "--authentication",
+            default=False,
+            action="store_true",
+            help="Enable token authentication for clients",
+        )
+        group.add_argument(
             "--http-domain",
             default=None,
             type=str,
@@ -177,6 +183,11 @@ def connection_group(parser: argparse.ArgumentParser, server: bool) -> None:
             default=base.ProtocolType.TCP,
             type=base.ProtocolType.from_str,
             help="Select the protocol to be used. (default: tcp)",
+        )
+        group.add_argument(
+            "--auth-token",
+            default=None,
+            help="Specify the authentication token used for server which require them",
         )
 
     if api.web:
@@ -280,6 +291,12 @@ def option_group(parser: argparse.ArgumentParser, server: bool) -> None:
     )
     if server:
         group.add_argument(
+            "--auth-timeout",
+            type=int,
+            default=60,
+            help="Validity time of authentication tokens",
+        )
+        group.add_argument(
             "--max-tunnels",
             type=int,
             default=0,
@@ -371,6 +388,7 @@ def run_client(no_curses: bool) -> None:
         cert=base.config.cert,
         key=base.config.key,
         protocol=base.config.protocol,
+        auth_token=base.config.auth_token,
     )
     cli.start()
 
@@ -389,6 +407,8 @@ def run_server() -> None:
         crl=base.config.crl,
         tunnel_host=base.config.tunnel_host,
         ports=base.config.ports,
+        authentication=base.config.authentication,
+        auth_timeout=base.config.auth_timeout,
     )
     server.start()
 

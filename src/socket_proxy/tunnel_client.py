@@ -21,6 +21,7 @@ class TunnelClient(tunnel.Tunnel, api.APIMixin):
         ca: str,
         cert: str = None,
         key: str = None,
+        auth_token: str = None,
         **kwargs,
     ):
         super().__init__(api_type=api.APIType.Client, **kwargs)
@@ -30,6 +31,7 @@ class TunnelClient(tunnel.Tunnel, api.APIMixin):
         self.running = False
         self.addr = []
         self.last_ping = self.last_pong = None
+        self.auth_token = auth_token
 
         self.ping_enabled = base.config.ping
 
@@ -200,6 +202,9 @@ class TunnelClient(tunnel.Tunnel, api.APIMixin):
         try:
             # Start the tunnel and send the initial package
             self.running = True
+            if self.auth_token:
+                await self.tunnel.tun_write(package.AuthPackage(self.auth_token))
+
             pkg = package.ConnectPackage(self.protocol)
             await self.tunnel.tun_write(pkg)
             await self._serve()

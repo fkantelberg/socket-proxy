@@ -21,6 +21,7 @@ like nginx with SSL and a wildcard certificate if HTTPS is required.
 
 - TLS encryption of the tunnel
 - Support for client certificates if CA is specified on the server
+- Support for token authentication. These tokens are rotating automatically
 - Support for IPv4 and IPv6
 - Proxy generic TCP ports or more specific HTTP servers
 - Limitation of number of tunnels, clients per tunnel, and connections per IP
@@ -59,6 +60,8 @@ The client side API doesn't support SSL!
 `GET /` returns the state of the server as JSON dictionary. Use the path to get only specific information.
 E.g. `/tunnels` only returns the sub-dictionary `tunnels` and `/tunnels/edcb13dc0c7c6c64` returns only
 information about the tunnel `edcb13dc0c7c6c64`.
+
+`GET /api/token` returns a new authentication token as JSON string.
 
 `DELETE /<tunnel>/<client>` disconnects the client `<client>` of the tunnel `<tunnel>`.
 

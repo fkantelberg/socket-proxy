@@ -2,10 +2,11 @@ import asyncio
 import ssl
 import subprocess
 import time
+from datetime import datetime
 from unittest import mock
 
 import pytest
-from aiohttp import ClientSession
+from aiohttp import ClientSession, web
 
 from socket_proxy import Tunnel, TunnelClient, base, connection, package, proxy, utils
 
@@ -225,6 +226,66 @@ async def test_tunnel_idle():
 
 
 @pytest.mark.asyncio
+async def test_authenticated_tunnel(server):
+    server.authentication = True
+    token = server.generate_token()
+
+    client = TunnelClient(
+        host="localhost",
+        port=TCP_PORT,
+        dst_host="localhost",
+        dst_port=TCP_PORT_DUMMY,
+        cert=CLIENT_CERT,
+        key=CLIENT_KEY,
+        ca=CA_CERT,
+        auth_token=token,
+    )
+    client._interval = mock.AsyncMock()
+    asyncio.create_task(client.loop())
+    await asyncio.sleep(0.1)
+    assert client.addr
+    await client.stop()
+    await asyncio.sleep(0.1)
+
+    client.addr = []
+    client.auth_token = "invalid"
+    asyncio.create_task(client.loop())
+    await asyncio.sleep(0.1)
+    assert not client.addr
+
+    client.auth_token = False
+    asyncio.create_task(client.loop())
+    await asyncio.sleep(0.1)
+    assert not client.addr
+
+    req_mock = mock.AsyncMock(path="/api/token")
+    response = await server._api_index(req_mock)
+    assert response.status == 200
+    await asyncio.sleep(0.1)
+
+    server.authentication = False
+    with pytest.raises(web.HTTPNotFound):
+        await server._api_index(req_mock)
+    await asyncio.sleep(0.1)
+
+    resp = await server._api_handle(("invalid",), req_mock)
+    assert resp is None
+    await asyncio.sleep(0.1)
+
+
+@pytest.mark.asyncio
+async def test_proxy_token_cleanup(server):
+    server.tokens["old-token"] = datetime(1970, 1, 1)
+    await server.idle()
+    assert "old-token" not in server.tokens
+    assert not server.tokens
+
+    server.authentication = True
+    await server.idle()
+    assert server.tokens
+
+
+@pytest.mark.asyncio
 async def test_close_exception():
     def raiseAssert(*args, **kwargs):
         raise AssertionError()
@@ -315,7 +376,7 @@ async def test_http_tunnel_with_dummy(echo_server, http_server, http_client):
 
 @pytest.mark.asyncio
 async def test_proxy_tunnel_limit(server):
-    reader = writer = mock.AsyncMock()
+    reader = writer = mock.AsyncMock(feed_eof=mock.MagicMock(), close=mock.MagicMock())
     await asyncio.sleep(0.1)
 
     server.max_tunnels = 1
@@ -577,6 +638,9 @@ async def test_api_server(echo_server, api_server, api_client, http_client):
             assert await response.json() == api_server.get_state_dict()["tcp"]
 
         async with session.get("/invalid") as response:
+            assert response.status == 404
+
+        async with session.get("/api/token") as response:
             assert response.status == 404
 
         # Activate API token

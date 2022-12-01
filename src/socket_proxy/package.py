@@ -101,7 +101,7 @@ class Package(metaclass=MetaPackage):
 class ConnectPackage(Package):
     """Package to configure/start the server site
 
-    Structure: <SUPER>
+    Structure: <SUPER> <protocol>
     """
 
     _name = "connect"
@@ -127,7 +127,7 @@ class ConnectPackage(Package):
 class PingPackage(Package):
     """Package to for a regular ping to keep the connection active
 
-    Structure: <SUPER>
+    Structure: <SUPER> <time>
     """
 
     _name = "ping"
@@ -147,6 +147,30 @@ class PingPackage(Package):
     async def recv(cls, reader: asyncio.StreamReader) -> Tuple[Any]:
         res = await super().recv(reader)
         return await cls.TIMESTAMP.read(reader) + res
+
+
+class AuthPackage(Package):
+    """Package to for a regular ping to keep the connection active
+
+    Structure: <SUPER> <length of token> <token>
+    """
+
+    _name = "auth"
+    _type = 0x03
+    __slots__ = ("token",)
+
+    def __init__(self, token: str, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.token = token
+
+    def to_bytes(self) -> bytes:
+        return super().to_bytes() + PackageStruct.pack_string(self.token)
+
+    @classmethod
+    async def recv(cls, reader: asyncio.StreamReader) -> Tuple[Any]:
+        res = await super().recv(reader)
+        token = await PackageStruct.read_string(reader)
+        return (token,) + res
 
 
 class InitPackage(Package):

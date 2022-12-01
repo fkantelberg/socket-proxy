@@ -1,10 +1,12 @@
 import asyncio
 import logging
 import re
+import uuid
 from asyncio import StreamReader, StreamWriter
-from typing import List, Tuple, Union
+from datetime import datetime, timedelta
+from typing import Any, List, Tuple, Union
 
-from . import api, base, utils
+from . import api, base, package, utils
 from .tunnel_server import TunnelServer
 
 _logger = logging.getLogger(__name__)
@@ -24,6 +26,8 @@ class ProxyServer(api.APIMixin):
         key: str,
         ca: str = None,
         crl: str = None,
+        authentication: bool = False,
+        auth_timeout: int = 60,
         **kwargs,
     ):
         super().__init__(api_type=api.APIType.Server)
@@ -32,6 +36,7 @@ class ProxyServer(api.APIMixin):
         self.max_tunnels = base.config.max_tunnels
         self.http_ssl = base.config.http_ssl
         self.tunnels = {}
+        self.tokens = {}
         self.sc = utils.generate_ssl_context(
             cert=cert,
             key=key,
@@ -40,6 +45,9 @@ class ProxyServer(api.APIMixin):
             server=True,
         )
         self.http_proxy = self.server = None
+
+        self.authentication = authentication
+        self.auth_timeout = auth_timeout
 
         if isinstance(base.config.http_domain, str) and base.config.http_listen:
             self.http_host, self.http_port = base.config.http_listen
@@ -51,15 +59,55 @@ class ProxyServer(api.APIMixin):
             self.http_host = self.http_port = False
             self.http_domain = self.http_domain_regex = False
 
+    async def idle(self) -> None:
+        """This methods will get called regularly to apply timeouts"""
+        dt = datetime.now() - timedelta(seconds=self.auth_timeout)
+        for token, t in list(self.tokens.items()):
+            if t < dt:
+                self.tokens.pop(token, None)
+                _logger.info("Invalidated token %s", token)
+
+        if self.authentication and not self.tokens:
+            self.generate_token()
+
+    def generate_token(self):
+        """Generate a new authentication token"""
+        if not self.authentication:
+            return None
+
+        token = str(uuid.uuid4())
+        self.tokens[token] = datetime.now()
+        _logger.info("Generated authentication token %s", token)
+        return token
+
+    async def _api_handle(self, path: Tuple[str], request: api.Request) -> Any:
+        """Handle api functions"""
+        if "token" in path[:1]:
+            return self.generate_token()
+        return await super()._api_handle(path, request)
+
     async def _accept(self, reader: StreamReader, writer: StreamWriter) -> None:
         """Accept new tunnels and start to listen for clients"""
 
         # Limit the number of tunnels
         if 0 < self.max_tunnels <= len(self.tunnels):
+            await self.close(reader, writer)
             return
 
         # Create the tunnel object and generate an unique token
         tunnel = TunnelServer(reader, writer, domain=self.http_domain, **self.kwargs)
+
+        if self.authentication:
+            # Expect the token as first package
+            pkg = await tunnel.tunnel.tun_read()
+            if not isinstance(pkg, package.AuthPackage):
+                await self.close(reader, writer)
+                return
+
+            if pkg.token not in self.tokens:
+                await self.close(reader, writer)
+                return
+
         self.tunnels[tunnel.uuid] = tunnel
         try:
             await tunnel.loop()
@@ -141,6 +189,8 @@ class ProxyServer(api.APIMixin):
         if self.api_port:
             asyncio.create_task(self.start_api())
 
+        asyncio.create_task(self._interval())
+
         self.server = await asyncio.start_server(
             self._accept,
             self.host,
@@ -214,3 +264,9 @@ class ProxyServer(api.APIMixin):
         reader.feed_eof()
         writer.close()
         await writer.wait_closed()
+
+    async def _interval(self) -> None:
+        """Calls regularly the idle function"""
+        while True:
+            await self.idle()
+            await asyncio.sleep(base.INTERVAL_TIME)
