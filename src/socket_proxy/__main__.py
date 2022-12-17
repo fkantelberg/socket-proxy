@@ -293,7 +293,7 @@ def option_group(parser: argparse.ArgumentParser, server: bool) -> None:
         group.add_argument(
             "--auth-timeout",
             type=int,
-            default=60,
+            default=900,
             help="Validity time of authentication tokens",
         )
         group.add_argument(

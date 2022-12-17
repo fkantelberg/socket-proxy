@@ -222,6 +222,7 @@ class ProxyServer(api.APIMixin):
                 "host": self.host,
                 "port": self.port,
             },
+            "tokens": {t: dt.isoformat(" ") for t, dt in self.tokens.items()},
             "tunnels": tunnels,
         }
 
