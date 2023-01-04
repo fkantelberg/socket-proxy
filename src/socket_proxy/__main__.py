@@ -189,6 +189,12 @@ def connection_group(parser: argparse.ArgumentParser, server: bool) -> None:
             default=None,
             help="Specify the authentication token used for server which require them",
         )
+        group.add_argument(
+            "--auth-htop",
+            default=False,
+            action="store_true",
+            help="Authentication token is as the base of an time-based token",
+        )
 
     if api.web:
         group.add_argument(

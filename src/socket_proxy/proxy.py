@@ -63,28 +63,48 @@ class ProxyServer(api.APIMixin):
         """This methods will get called regularly to apply timeouts"""
         dt = datetime.now() - timedelta(seconds=self.auth_timeout)
         for token, t in list(self.tokens.items()):
-            if t < dt:
+            if token and t < dt:
                 self.tokens.pop(token, None)
                 _logger.info("Invalidated token %s", token)
 
         if self.authentication and not self.tokens:
             self.generate_token()
 
-    def generate_token(self):
+    def generate_token(self, hotp: bool = False) -> str:
         """Generate a new authentication token"""
         if not self.authentication:
             return None
 
         token = str(uuid.uuid4())
-        self.tokens[token] = datetime.now()
-        _logger.info("Generated authentication token %s", token)
+        self.tokens[token] = None if hotp else datetime.now()
+        _logger.info(
+            "Generated authentication token %s [%s]",
+            token,
+            "hotp" if hotp else "totp",
+        )
         return token
 
     async def _api_handle(self, path: Tuple[str], request: api.Request) -> Any:
         """Handle api functions"""
+        if ("token", "hotp") == path[:2]:
+            return self.generate_token(True)
         if "token" in path[:1]:
-            return self.generate_token()
+            return self.generate_token(False)
         return await super()._api_handle(path, request)
+
+    def _verify_auth_token(self, pkg: package.AuthPackage) -> bool:
+        """Verify an authentication package"""
+        for token, dt in self.tokens.items():
+            if pkg.token_type == base.AuthType.TOTP and dt and token == pkg.token:
+                return True
+            if (
+                pkg.token_type == base.AuthType.HOTP
+                and dt is None
+                and utils.hotp_verify(token, pkg.token)
+            ):
+                return True
+
+        return False
 
     async def _accept(self, reader: StreamReader, writer: StreamWriter) -> None:
         """Accept new tunnels and start to listen for clients"""
@@ -104,7 +124,7 @@ class ProxyServer(api.APIMixin):
                 await self.close(reader, writer)
                 return
 
-            if pkg.token not in self.tokens:
+            if self._verify_auth_token(pkg):
                 await self.close(reader, writer)
                 return
 
