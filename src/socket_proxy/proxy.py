@@ -94,15 +94,13 @@ class ProxyServer(api.APIMixin):
 
     def _verify_auth_token(self, pkg: package.AuthPackage) -> bool:
         """Verify an authentication package"""
-        for token, dt in self.tokens.items():
-            if pkg.token_type == base.AuthType.TOTP and dt and token == pkg.token:
-                return True
-            if (
-                pkg.token_type == base.AuthType.HOTP
-                and dt is None
-                and utils.hotp_verify(token, pkg.token)
-            ):
-                return True
+        if pkg.token_type == base.AuthType.TOTP:
+            return pkg.token in {tk for tk, dt in self.tokens.items() if dt}
+
+        if pkg.token_type == base.AuthType.HOTP:
+            for token, dt in self.tokens.items():
+                if dt is None and utils.hotp_verify(token, pkg.token):
+                    return True
 
         return False
 
@@ -124,7 +122,7 @@ class ProxyServer(api.APIMixin):
                 await self.close(reader, writer)
                 return
 
-            if self._verify_auth_token(pkg):
+            if not self._verify_auth_token(pkg):
                 await self.close(reader, writer)
                 return
 
