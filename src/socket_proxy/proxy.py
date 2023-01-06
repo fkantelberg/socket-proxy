@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import re
 import uuid
@@ -59,16 +60,52 @@ class ProxyServer(api.APIMixin):
             self.http_host = self.http_port = False
             self.http_domain = self.http_domain_regex = False
 
+        self._load_persisted_state()
+
+    def _load_persisted_state(self, file: str = None) -> None:
+        """Load the previously persisted state from the file"""
+        file = file or base.config.persist_state
+        if not file:
+            return
+
+        with open(file, encoding="utf-8") as fp:
+            state = json.load(fp)
+
+        # Restore the tokens
+        for tkn, dt in state.get("tokens", {}).items():
+            self.tokens[tkn] = datetime.fromisoformat(dt) if dt else None
+
+    def _persist_state(self, file: str = None) -> None:
+        """Persist the internal state of the proxy server like tokens"""
+        file = file or base.config.persist_state
+        if not file:
+            return
+
+        with open(file, "w+", encoding="utf-8") as fp:
+            json.dump(
+                {
+                    "tokens": {
+                        tkn: dt.isoformat(" ") if dt else dt
+                        for tkn, dt in self.tokens.items()
+                    }
+                },
+                fp,
+            )
+
     async def idle(self) -> None:
         """This methods will get called regularly to apply timeouts"""
         dt = datetime.now() - timedelta(seconds=self.auth_timeout)
+        changes = False
         for token, t in list(self.tokens.items()):
-            if token and t < dt:
+            if t and token and t < dt:
                 self.tokens.pop(token, None)
+                changes = True
                 _logger.info("Invalidated token %s", token)
 
         if self.authentication and not self.tokens:
             self.generate_token()
+        elif changes:
+            self._persist_state()
 
     def generate_token(self, hotp: bool = False) -> str:
         """Generate a new authentication token"""
@@ -82,6 +119,7 @@ class ProxyServer(api.APIMixin):
             token,
             "hotp" if hotp else "totp",
         )
+        self._persist_state()
         return token
 
     async def _api_handle(self, path: Tuple[str], request: api.Request) -> Any:

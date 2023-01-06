@@ -24,7 +24,7 @@ class CustomHelpFormatter(argparse.HelpFormatter):
         return f"{'/'.join(action.option_strings)} {args_string}"
 
 
-def basic_group(parser: argparse.ArgumentParser) -> None:
+def basic_group(parser: argparse.ArgumentParser, server: bool = False) -> None:
     group = parser.add_argument_group("Security")
     group.add_argument(
         "--config",
@@ -32,6 +32,13 @@ def basic_group(parser: argparse.ArgumentParser) -> None:
         type=argparse.FileType(),
         help="Load everything from a configuration file",
     )
+    if server:
+        group.add_argument(
+            "--persist-state",
+            default=None,
+            type=utils.valid_file,
+            help="File to persist internal server data over restarts",
+        )
 
 
 def security_group(parser: argparse.ArgumentParser, server: bool) -> None:
@@ -190,7 +197,7 @@ def connection_group(parser: argparse.ArgumentParser, server: bool) -> None:
             help="Specify the authentication token used for server which require them",
         )
         group.add_argument(
-            "--auth-htop",
+            "--auth-hotp",
             default=False,
             action="store_true",
             help="Authentication token is as the base of an time-based token",
@@ -362,7 +369,7 @@ def parse_args(args: Tuple[str] = None) -> None:
         formatter_class=CustomHelpFormatter,
         help="Enter server mode and listen for incoming clients to build the tunnels.",
     )
-    basic_group(server)
+    basic_group(server, True)
     security_group(server, True)
     connection_group(server, True)
     option_group(server, True)

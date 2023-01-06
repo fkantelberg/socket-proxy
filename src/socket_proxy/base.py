@@ -122,6 +122,7 @@ config = argparse.Namespace(
     no_curses="TERM" not in os.environ,
     no_server=False,
     no_verify_hostname=False,
+    persist_state=None,
     ping=False,
     ports=None,
     protocol=ProtocolType.TCP,

@@ -2,12 +2,36 @@ import argparse
 import ipaddress
 import logging
 import socket
+import ssl
 from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
 
 from socket_proxy import base, utils
+
+from .common import CA_CERT, CLIENT_CERT, CLIENT_KEY, CRL, SERVER_CERT, SERVER_KEY
+
+
+def test_generate_ssl_context():
+    server = utils.generate_ssl_context(
+        cert=SERVER_CERT,
+        key=SERVER_KEY,
+        ca=CA_CERT,
+        crl=CRL,
+        server=True,
+    )
+
+    client = utils.generate_ssl_context(
+        cert=CLIENT_CERT,
+        key=CLIENT_KEY,
+        ca=CA_CERT,
+        server=False,
+        ciphers="RSA",
+    )
+
+    assert all(isinstance(ctx, ssl.SSLContext) for ctx in (client, server))
+    assert len(server.get_ciphers()) != len(client.get_ciphers())
 
 
 def test_transport_type():

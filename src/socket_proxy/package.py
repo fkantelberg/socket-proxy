@@ -175,7 +175,7 @@ class AuthPackage(Package):
     async def recv(cls, reader: asyncio.StreamReader) -> Tuple[Any]:
         res = await super().recv(reader)
         token = await PackageStruct.read_string(reader)
-        token_type = await PackageStruct("!B").read(reader)
+        (token_type,) = await PackageStruct("!B").read(reader)
         return (token, base.AuthType(token_type)) + res
 
 
