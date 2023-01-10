@@ -1,8 +1,7 @@
 import asyncio
-import ssl
-import subprocess
 import time
 from datetime import datetime
+from tempfile import NamedTemporaryFile
 from unittest import mock
 
 import pytest
@@ -10,48 +9,19 @@ from aiohttp import ClientSession, web
 
 from socket_proxy import Tunnel, TunnelClient, base, connection, package, proxy, utils
 
-CA_CERT = "pki/ca.pem"
-CLIENT_CERT = "pki/client.pem"
-CLIENT_KEY = "pki/client.key"
-SERVER_CERT = "pki/server.pem"
-SERVER_KEY = "pki/server.key"
-CRL = "pki/crl.pem"
-
-TCP_PORT = utils.get_unused_port(5000, 10000)
-TCP_PORT_DUMMY = utils.get_unused_port(5000, 10000)
-
-with subprocess.Popen(["./certs.sh", "client"], stdin=subprocess.PIPE) as proc:
-    proc.communicate()
-with subprocess.Popen(["./certs.sh", "server"], stdin=subprocess.PIPE) as proc:
-    proc.communicate(b"y\n" * 80)
-
+from .common import (
+    CA_CERT,
+    CLIENT_CERT,
+    CLIENT_KEY,
+    CRL,
+    SERVER_CERT,
+    SERVER_KEY,
+    TCP_PORT,
+    TCP_PORT_DUMMY,
+    raiseAssertAsync,
+)
 
 # pylint: disable=W0613
-
-
-def raiseAssertAsync(*args, **kwargs):
-    raise AssertionError()
-
-
-def test_generate_ssl_context():
-    server = utils.generate_ssl_context(
-        cert=SERVER_CERT,
-        key=SERVER_KEY,
-        ca=CA_CERT,
-        crl=CRL,
-        server=True,
-    )
-
-    client = utils.generate_ssl_context(
-        cert=CLIENT_CERT,
-        key=CLIENT_KEY,
-        ca=CA_CERT,
-        server=False,
-        ciphers="RSA",
-    )
-
-    assert all(isinstance(ctx, ssl.SSLContext) for ctx in (client, server))
-    assert len(server.get_ciphers()) != len(client.get_ciphers())
 
 
 @pytest.fixture
@@ -230,7 +200,7 @@ async def test_authenticated_tunnel(server):
     server.authentication = True
     token = server.generate_token()
 
-    client = TunnelClient(
+    cli = TunnelClient(
         host="localhost",
         port=TCP_PORT,
         dst_host="localhost",
@@ -240,27 +210,62 @@ async def test_authenticated_tunnel(server):
         ca=CA_CERT,
         auth_token=token,
     )
-    client._interval = mock.AsyncMock()
-    asyncio.create_task(client.loop())
+    cli._interval = mock.AsyncMock()
+    asyncio.create_task(cli.loop())
     await asyncio.sleep(0.1)
-    assert client.addr
-    await client.stop()
+    assert cli.addr
+    await cli.stop()
     await asyncio.sleep(0.1)
 
-    client.addr = []
-    client.auth_token = "invalid"
-    asyncio.create_task(client.loop())
+    cli.addr = []
+    cli.auth_token = "invalid"
+    asyncio.create_task(cli.loop())
     await asyncio.sleep(0.1)
-    assert not client.addr
+    assert not cli.addr
+    await cli.stop()
+    await asyncio.sleep(0.1)
 
-    client.auth_token = False
-    asyncio.create_task(client.loop())
+    cli.addr = []
+    cli.auth_token = server.generate_token(True)
+    base.config.auth_hotp = True
+    asyncio.create_task(cli.loop())
     await asyncio.sleep(0.1)
-    assert not client.addr
+    assert cli.addr
+    await cli.stop()
+    await asyncio.sleep(0.1)
+
+    cli.addr = []
+    cli.auth_token = "invalid"
+    asyncio.create_task(cli.loop())
+    await asyncio.sleep(0.1)
+    assert not cli.addr
+    await cli.stop()
+    await asyncio.sleep(0.1)
+
+    cli.addr = []
+    cli.auth_token = False
+    asyncio.create_task(cli.loop())
+    await asyncio.sleep(0.1)
+    await cli.stop()
+    assert not cli.addr
+
+
+@pytest.mark.asyncio
+async def test_authenticated_tunnel_api(server):
+    server.authentication = True
 
     req_mock = mock.AsyncMock(path="/api/token")
     response = await server._api_index(req_mock)
+    token = response.text.strip().replace('"', "")
     assert response.status == 200
+    assert server.tokens[token]
+    await asyncio.sleep(0.1)
+
+    req_mock = mock.AsyncMock(path="/api/token/hotp")
+    response = await server._api_index(req_mock)
+    token = response.text.strip().replace('"', "")
+    assert response.status == 200
+    assert server.tokens[token] is None
     await asyncio.sleep(0.1)
 
     server.authentication = False
@@ -271,6 +276,23 @@ async def test_authenticated_tunnel(server):
     resp = await server._api_handle(("invalid",), req_mock)
     assert resp is None
     await asyncio.sleep(0.1)
+
+
+@pytest.mark.asyncio
+async def test_server_state_persistent(server):
+    with NamedTemporaryFile("w+") as fp:
+        server.authentication = True
+        server.generate_token()
+        server.generate_token(True)
+
+        server._persist_state(fp.name)
+
+        fp.seek(0)
+        data = server.tokens
+        server.tokens = {}
+        server._load_persisted_state(fp.name)
+        assert data == server.tokens
+        assert server.tokens
 
 
 @pytest.mark.asyncio
@@ -387,15 +409,15 @@ async def test_proxy_tunnel_limit(server):
 
 
 def test_start_functions():
-    server = proxy.ProxyServer("", TCP_PORT, None, None, None)
-    server.loop = mock.AsyncMock()
-    server.start()
-    assert server.loop.call_count
+    srv = proxy.ProxyServer("", TCP_PORT, None, None, None)
+    srv.loop = mock.AsyncMock()
+    srv.start()
+    assert srv.loop.call_count
 
-    client = TunnelClient("", TCP_PORT, "", TCP_PORT_DUMMY, None)
-    client.loop = mock.AsyncMock()
-    client.start()
-    assert client.loop.call_count
+    cli = TunnelClient("", TCP_PORT, "", TCP_PORT_DUMMY, None)
+    cli.loop = mock.AsyncMock()
+    cli.start()
+    assert cli.loop.call_count
 
 
 @pytest.mark.asyncio
@@ -460,38 +482,38 @@ async def test_tunnel_client():
     cli.token = b"\x00" * base.CLIENT_NAME_SIZE
     cli.read.return_value = None
 
-    client = TunnelClient("", TCP_PORT, "", TCP_PORT_DUMMY, None)
-    client._disconnect_client = mock.AsyncMock()
-    client.add(cli)
-    client.tunnel = mock.AsyncMock()
-    client.running = True
+    tclient = TunnelClient("", TCP_PORT, "", TCP_PORT_DUMMY, None)
+    tclient._disconnect_client = mock.AsyncMock()
+    tclient.add(cli)
+    tclient.tunnel = mock.AsyncMock()
+    tclient.running = True
 
     # Try connect with existing client
     pkg = package.ClientInitPackage("::1", TCP_PORT_DUMMY, cli.token)
-    await client._connect_client(pkg)
-    assert len(client.clients) == 1
+    await tclient._connect_client(pkg)
+    assert len(tclient.clients) == 1
 
     # Close connection while client still running
     cli.reader = asyncio.StreamReader()
     cli.reader.feed_eof()
-    await client._client_loop(cli)
-    assert client.tunnel.tun_write.call_count
+    await tclient._client_loop(cli)
+    assert tclient.tunnel.tun_write.call_count
 
     # Exception during writing and closing of client
-    client.running = True
+    tclient.running = True
     cli.reader = asyncio.StreamReader()
     cli.read.return_value = b"abc"
-    client.tunnel.tun_write = client.tunnel.tun_data = raiseAssertAsync
-    await client._client_loop(cli)
+    tclient.tunnel.tun_write = tclient.tunnel.tun_data = raiseAssertAsync
+    await tclient._client_loop(cli)
 
     # Invalid package on the tunnel
-    client.tunnel.tun_read = mock.AsyncMock()
-    client.tunnel.tun_read.return_value = None
-    assert await client._handle() is False
-    assert client.tunnel.tun_read.call_count
+    tclient.tunnel.tun_read = mock.AsyncMock()
+    tclient.tunnel.tun_read.return_value = None
+    assert await tclient._handle() is False
+    assert tclient.tunnel.tun_read.call_count
 
-    client.tunnel.tun_read.return_value = package.Package()
-    assert await client._handle() is False
+    tclient.tunnel.tun_read.return_value = package.Package()
+    assert await tclient._handle() is False
 
 
 @pytest.mark.asyncio
@@ -537,7 +559,7 @@ async def test_tunnel_ping(server, client):
 
 
 @pytest.mark.asyncio
-async def test_api_client(echo_server, api_server, api_client, http_client):
+async def test_api_client(echo_server, server, api_client, http_client):
     async def connect_and_send(ip, port):
         # Open a connection to get a client
         reader, writer = await asyncio.open_connection(ip, port)
@@ -601,7 +623,7 @@ async def test_api_client(echo_server, api_server, api_client, http_client):
 
 
 @pytest.mark.asyncio
-async def test_api_server(echo_server, api_server, api_client, http_client):
+async def test_api_server(echo_server, api_server, client, http_client):
     async def connect_and_send(ip, port):
         # Open a connection to get a client
         reader, writer = await asyncio.open_connection(ip, port)
@@ -646,7 +668,7 @@ async def test_api_server(echo_server, api_server, api_client, http_client):
         # Activate API token
         api_server.api_token = "Bearer abcd"
         headers = {"Authorization": "Bearer abcd"}
-        tuuid = api_client.uuid
+        tuuid = client.uuid
         async with session.get("/") as response:
             assert response.status == 403
 
@@ -656,7 +678,7 @@ async def test_api_server(echo_server, api_server, api_client, http_client):
         async with session.get("/", headers=headers) as response:
             assert response.status == 200
 
-        for ip_type, port in api_client.addr:
+        for ip_type, port in client.addr:
             if ip_type == base.InternetType.IPv4:
                 await connect_and_send("127.0.0.1", port)
             elif ip_type == base.InternetType.IPv6:

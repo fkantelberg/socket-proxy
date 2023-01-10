@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import re
 import uuid
@@ -59,32 +60,90 @@ class ProxyServer(api.APIMixin):
             self.http_host = self.http_port = False
             self.http_domain = self.http_domain_regex = False
 
+        self._load_persisted_state()
+
+    def _load_persisted_state(self, file: str = None) -> None:
+        """Load the previously persisted state from the file"""
+        file = file or base.config.persist_state
+        if not file:
+            return
+
+        try:
+            with open(file, encoding="utf-8") as fp:
+                state = json.load(fp)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return
+
+        # Restore the tokens
+        for tkn, dt in state.get("tokens", {}).items():
+            self.tokens[tkn] = datetime.fromisoformat(dt) if dt else None
+
+    def _persist_state(self, file: str = None) -> None:
+        """Persist the internal state of the proxy server like tokens"""
+        file = file or base.config.persist_state
+        if not file:
+            return
+
+        with open(file, "w+", encoding="utf-8") as fp:
+            json.dump(
+                {
+                    "tokens": {
+                        tkn: dt.isoformat(" ") if dt else dt
+                        for tkn, dt in self.tokens.items()
+                    }
+                },
+                fp,
+            )
+
     async def idle(self) -> None:
         """This methods will get called regularly to apply timeouts"""
         dt = datetime.now() - timedelta(seconds=self.auth_timeout)
+        changes = False
         for token, t in list(self.tokens.items()):
-            if t < dt:
+            if t and token and t < dt:
                 self.tokens.pop(token, None)
+                changes = True
                 _logger.info("Invalidated token %s", token)
 
         if self.authentication and not self.tokens:
             self.generate_token()
+        elif changes:
+            self._persist_state()
 
-    def generate_token(self):
+    def generate_token(self, hotp: bool = False) -> str:
         """Generate a new authentication token"""
         if not self.authentication:
             return None
 
         token = str(uuid.uuid4())
-        self.tokens[token] = datetime.now()
-        _logger.info("Generated authentication token %s", token)
+        self.tokens[token] = None if hotp else datetime.now()
+        _logger.info(
+            "Generated authentication token %s [%s]",
+            token,
+            "hotp" if hotp else "totp",
+        )
+        self._persist_state()
         return token
 
     async def _api_handle(self, path: Tuple[str], request: api.Request) -> Any:
         """Handle api functions"""
+        if ("token", "hotp") == path[:2]:
+            return self.generate_token(True)
         if "token" in path[:1]:
-            return self.generate_token()
+            return self.generate_token(False)
         return await super()._api_handle(path, request)
+
+    def _verify_auth_token(self, pkg: package.AuthPackage) -> bool:
+        """Verify an authentication package"""
+        if pkg.token_type == base.AuthType.TOTP:
+            return pkg.token in {tk for tk, dt in self.tokens.items() if dt}
+
+        if pkg.token_type == base.AuthType.HOTP:
+            for token, dt in self.tokens.items():
+                if dt is None and utils.hotp_verify(token, pkg.token):
+                    return True
+
+        return False
 
     async def _accept(self, reader: StreamReader, writer: StreamWriter) -> None:
         """Accept new tunnels and start to listen for clients"""
@@ -104,7 +163,7 @@ class ProxyServer(api.APIMixin):
                 await self.close(reader, writer)
                 return
 
-            if pkg.token not in self.tokens:
+            if not self._verify_auth_token(pkg):
                 await self.close(reader, writer)
                 return
 
@@ -222,7 +281,9 @@ class ProxyServer(api.APIMixin):
                 "host": self.host,
                 "port": self.port,
             },
-            "tokens": {t: dt.isoformat(" ") for t, dt in self.tokens.items()},
+            "tokens": {
+                t: dt.isoformat(" ") if dt else dt for t, dt in self.tokens.items()
+            },
             "tunnels": tunnels,
         }
 

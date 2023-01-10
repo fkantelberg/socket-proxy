@@ -152,25 +152,31 @@ class PingPackage(Package):
 class AuthPackage(Package):
     """Package to for a regular ping to keep the connection active
 
-    Structure: <SUPER> <length of token> <token>
+    Structure: <SUPER> <length of token> <token> <token type>
     """
 
     _name = "auth"
     _type = 0x03
-    __slots__ = ("token",)
+    __slots__ = ("token", "token_type")
 
-    def __init__(self, token: str, *args, **kwargs):
+    def __init__(self, token: str, token_type: base.AuthType, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.token = token
+        self.token_type = token_type
 
     def to_bytes(self) -> bytes:
-        return super().to_bytes() + PackageStruct.pack_string(self.token)
+        return (
+            super().to_bytes()
+            + PackageStruct.pack_string(self.token)
+            + PackageStruct("!B").pack(self.token_type)
+        )
 
     @classmethod
     async def recv(cls, reader: asyncio.StreamReader) -> Tuple[Any]:
         res = await super().recv(reader)
         token = await PackageStruct.read_string(reader)
-        return (token,) + res
+        (token_type,) = await PackageStruct("!B").read(reader)
+        return (token, base.AuthType(token_type)) + res
 
 
 class InitPackage(Package):

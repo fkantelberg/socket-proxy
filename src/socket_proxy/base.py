@@ -44,6 +44,13 @@ class ReachedClientLimit(Exception):
     """The tunnel reached the maximum number of simultanous clients connected"""
 
 
+class AuthType(enum.IntEnum):
+    """Helper for authentication tokens"""
+
+    TOTP = 0x01
+    HOTP = 0x02
+
+
 class InternetType(enum.IntEnum):
     """Helper for IP addresses and identification"""
 
@@ -89,6 +96,7 @@ config = argparse.Namespace(
     api_ssl=False,
     api_token=None,
     authentication=False,
+    auth_hotp=False,
     auth_timeout=900,
     auth_token=None,
     ban_time=60,
@@ -114,6 +122,7 @@ config = argparse.Namespace(
     no_curses="TERM" not in os.environ,
     no_server=False,
     no_verify_hostname=False,
+    persist_state=None,
     ping=False,
     ports=None,
     protocol=ProtocolType.TCP,

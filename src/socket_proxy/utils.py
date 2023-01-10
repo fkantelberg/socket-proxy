@@ -1,4 +1,5 @@
 import argparse
+import hashlib
 import ipaddress
 import itertools
 import logging
@@ -8,7 +9,7 @@ import secrets
 import socket
 import ssl
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from random import shuffle
 from typing import Any, List, Set, Tuple, Union
 from urllib.parse import urlsplit
@@ -176,6 +177,31 @@ def get_unused_port(min_port: int, max_port: int, udp: bool = False) -> int:
         except Exception:
             pass
     return None
+
+
+def hotp(initial: str, dt: datetime = None) -> str:
+    """Generate the HOTP token for the specific time. The resolution is 1 min"""
+    if dt is None:
+        dt = datetime.utcnow()
+
+    base = f"{initial}{dt.replace(second=0, microsecond=0).isoformat(' ')}"
+    hashed = hashlib.sha512(base.encode()).hexdigest()
+
+    # Adapt a UUID format
+    offsets = [0, 8, 12, 16, 20, 32]
+    return "-".join(
+        hashed[offsets[i] : offsets[i + 1]] for i in range(len(offsets) - 1)
+    )
+
+
+def hotp_verify(initial: str, token: str, window: int = 5) -> bool:
+    """Verify a HOTP token based on a window"""
+    dt = datetime.utcnow()
+    for i in range(-window, window + 1):
+        if token == hotp(initial, dt + timedelta(minutes=i)):
+            return True
+
+    return False
 
 
 def merge_settings(a: int, b: int) -> int:

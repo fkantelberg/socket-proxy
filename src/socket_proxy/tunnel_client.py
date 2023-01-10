@@ -203,7 +203,13 @@ class TunnelClient(tunnel.Tunnel, api.APIMixin):
             # Start the tunnel and send the initial package
             self.running = True
             if self.auth_token:
-                await self.tunnel.tun_write(package.AuthPackage(self.auth_token))
+                if base.config.auth_hotp:
+                    token = utils.hotp(self.auth_token)
+                    pkg = package.AuthPackage(token, base.AuthType.HOTP)
+                else:
+                    pkg = package.AuthPackage(self.auth_token, base.AuthType.TOTP)
+
+                await self.tunnel.tun_write(pkg)
 
             pkg = package.ConnectPackage(self.protocol)
             await self.tunnel.tun_write(pkg)
