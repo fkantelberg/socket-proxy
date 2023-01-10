@@ -36,7 +36,6 @@ def basic_group(parser: argparse.ArgumentParser, server: bool = False) -> None:
         group.add_argument(
             "--persist-state",
             default=None,
-            type=utils.valid_file,
             help="File to persist internal server data over restarts",
         )
 

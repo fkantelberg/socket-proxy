@@ -78,7 +78,7 @@ class ProxyServer(api.APIMixin):
     def _persist_state(self, file: str = None) -> None:
         """Persist the internal state of the proxy server like tokens"""
         file = file or base.config.persist_state
-        if not file:
+        if not file or not utils.valid_file(file):
             return
 
         with open(file, "w+", encoding="utf-8") as fp:
