@@ -65,11 +65,14 @@ class ProxyServer(api.APIMixin):
     def _load_persisted_state(self, file: str = None) -> None:
         """Load the previously persisted state from the file"""
         file = file or base.config.persist_state
-        if not file or not utils.valid_file(file):
+        if not file:
             return
 
-        with open(file, encoding="utf-8") as fp:
-            state = json.load(fp)
+        try:
+            with open(file, encoding="utf-8") as fp:
+                state = json.load(fp)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return
 
         # Restore the tokens
         for tkn, dt in state.get("tokens", {}).items():
