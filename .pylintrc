@@ -28,7 +28,6 @@ disable=raw-checker-failed,
         too-many-arguments,
         redefined-outer-name,
         bad-mcs-classmethod-argument,
-        no-self-use,
         too-few-public-methods,
 
 [IMPORTS]

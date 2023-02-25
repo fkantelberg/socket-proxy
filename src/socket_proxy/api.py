@@ -21,8 +21,12 @@ class APIType(enum.IntEnum):
 class APIMixin:
     def __init__(self, api_type: APIType):
         self.api_type = api_type
-        self.api = None
+        self.api = self.api_ssl = None
         self.api_host = self.api_port = self.api_token = False
+
+        if web is None:
+            return
+
         self.api_ssl = base.config.api_ssl if self.api_type == APIType.Server else None
 
         if base.config.api:
