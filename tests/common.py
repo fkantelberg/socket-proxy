@@ -55,6 +55,8 @@ async def echo_server(port):
 
 @asynccontextmanager
 async def server(port):
+    base.config.api = False
+
     server = proxy.ProxyServer(
         host="",
         port=port,
@@ -74,6 +76,8 @@ async def server(port):
 
 @asynccontextmanager
 async def client(port, dst_port):
+    base.config.api = False
+
     client = TunnelClient(
         host="localhost",
         port=port,
@@ -94,6 +98,7 @@ async def client(port, dst_port):
 
 @asynccontextmanager
 async def http_server(port, http_port):
+    base.config.api = False
     base.config.http_domain = "example.org"
     base.config.http_listen = "127.0.0.1", http_port
 
@@ -165,6 +170,8 @@ async def api_client(port, dst_port, http_port, api_port):
 
 @asynccontextmanager
 async def http_client(port, dst_port):
+    base.config.api = False
+
     client = TunnelClient(
         host="localhost",
         port=port,

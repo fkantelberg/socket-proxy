@@ -5,3 +5,5 @@ from .proxy import ProxyServer
 from .tunnel import Tunnel
 from .tunnel_client import TunnelClient
 from .tunnel_server import TunnelServer
+
+VERSION = "4.0.1"

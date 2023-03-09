@@ -6,7 +6,15 @@ from aiohttp import ClientSession, web
 
 from socket_proxy import base
 
-from .common import api_client, api_server, client, echo_server, server, unused_ports
+from .common import (
+    api_client,
+    api_server,
+    client,
+    echo_server,
+    http_client,
+    server,
+    unused_ports,
+)
 
 
 @pytest.mark.asyncio
@@ -46,7 +54,7 @@ async def test_api_server():
 
     async with echo_server(dst_port), api_server(
         port, http_port, api_port
-    ) as srv, client(port, dst_port) as cli:
+    ) as srv, client(port, dst_port) as cli, http_client(port, dst_port):
 
         async def connect_and_send(ip, port):
             # Open a connection to get a client
@@ -76,8 +84,10 @@ async def test_api_server():
             async with session.get("/") as response:
                 assert response.status == 200
                 data = await response.json()
+                print(data)
+                print(srv.get_state_dict())
                 assert data == srv.get_state_dict()
-                assert len(data["tunnels"]) == 1
+                assert len(data["tunnels"]) == 2
 
             async with session.get("/tcp") as response:
                 assert response.status == 200
