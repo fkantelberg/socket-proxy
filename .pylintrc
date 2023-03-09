@@ -29,6 +29,7 @@ disable=raw-checker-failed,
         redefined-outer-name,
         bad-mcs-classmethod-argument,
         too-few-public-methods,
+        duplicate-code,
 
 [IMPORTS]
 ignored-modules=aiohttp,pytest,socket_proxy
