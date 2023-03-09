@@ -115,7 +115,7 @@ class GUIClient(TunnelClient):
         win.refresh()
         return win
 
-    def _draw_lines(self, win, lines: List[str]) -> None:
+    def _draw_lines(self, win, lines: List[str]) -> None:  # pylint: disable=R0201
         """Draw multiple lines in a window with some border"""
         h, w = [k - 2 for k in win.getmaxyx()]
         for y, line in enumerate(lines[:h]):

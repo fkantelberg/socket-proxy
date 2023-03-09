@@ -92,6 +92,10 @@ def configure_logging(log_file: str, level: str) -> None:
         log.addHandler(handler)
 
 
+def format_port(ip_type: base.InternetType, ip: base.IPvXAddress, port: int) -> str:
+    return f"{'' if ip.is_unspecified else ip}:{port} [{ip_type.name}]"
+
+
 def format_transfer(b: int) -> str:
     """Format a number of bytes in a more human readable format"""
     symbols = [("T", 1 << 40), ("G", 1 << 30), ("M", 1 << 20), ("K", 1 << 10)]

@@ -48,9 +48,6 @@ class TunnelClient(tunnel.Tunnel, api.APIMixin):
     def error(self, msg: str, *args) -> None:
         _logger.error(msg.capitalize(), *args)
 
-    def fmt_port(self, ip_type, ip, port):
-        return f"{'' if ip.is_unspecified else ip}:{port} [{ip_type.name}]"
-
     async def idle(self) -> None:
         await super().idle()
 
@@ -135,7 +132,7 @@ class TunnelClient(tunnel.Tunnel, api.APIMixin):
             # Output the public addresses
             addr = [(base.InternetType.from_ip(ip), ip, port) for ip, port in self.addr]
             for a in sorted(addr):
-                self.info(f"open on {self.fmt_port(*a)}")
+                self.info(f"open on {utils.format_port(*a)}")
 
             if self.protocol == base.ProtocolType.HTTP:
                 self.info(f"domain: {self.domain}")
