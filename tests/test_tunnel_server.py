@@ -21,7 +21,7 @@ def init_test_server():
     writer.get_extra_info.return_value = ("127.0.0.1", TCP_PORT)
 
     base.config.max_connects = 1
-    server = TunnelServer(reader, writer)
+    server = TunnelServer(reader, writer, event=mock.AsyncMock())
     server.add = raiseAssert
     return server, reader, writer
 

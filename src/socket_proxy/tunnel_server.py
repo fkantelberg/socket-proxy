@@ -8,6 +8,7 @@ from typing import List, Tuple
 
 from . import base, package, tunnel, utils
 from .connection import Connection
+from .event import EventSystem
 
 _logger = logging.getLogger(__name__)
 
@@ -20,6 +21,7 @@ class TunnelServer(tunnel.Tunnel):
         reader: StreamReader,
         writer: StreamWriter,
         *,
+        event: EventSystem,
         domain: str = "",
         tunnel_host: str = None,
         ports: Tuple[int, int] = None,
@@ -36,6 +38,7 @@ class TunnelServer(tunnel.Tunnel):
         self.server = None
         self.connections = collections.defaultdict(utils.Ban)
         self.protocols = protocols or utils.protocols()
+        self.event = event
 
     def block(self, ip: base.IPvXAddress) -> bool:
         """Decide whether the ip should be blocked"""
@@ -74,6 +77,7 @@ class TunnelServer(tunnel.Tunnel):
             await writer.wait_closed()
 
             _logger.info("Connection from %s blocked", ip)
+            await self.event.send(msg="client_blocked", tunnel=self.uuid, ip=str(ip))
             return
 
         self.connections[ip].hits += 1
@@ -83,6 +87,11 @@ class TunnelServer(tunnel.Tunnel):
         self.add(client)
 
         _logger.info("Client %s connected on %s:%s", client.uuid, host, port)
+        await self.event.send(
+            msg="client_connect",
+            tunnel=self.uuid,
+            client=client.uuid,
+        )
 
         # Inform the tunnel about the new client
         pkg = package.ClientInitPackage(ip, port, client.token)
@@ -106,6 +115,15 @@ class TunnelServer(tunnel.Tunnel):
             await self.tunnel.tun_write(pkg)
 
         await self._disconnect_client(client.token)
+
+    async def _disconnect_client(self, token: bytes) -> None:
+        """Disconnect a client and generate an event"""
+        await self.event.send(
+            msg="client_disconnect",
+            tunnel=self.uuid,
+            client=token.hex(),
+        )
+        return await super()._disconnect_client(token)
 
     async def _open_server(self) -> bool:
         """Open the public server listener and start the main loop"""

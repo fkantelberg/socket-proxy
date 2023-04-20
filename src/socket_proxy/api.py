@@ -19,6 +19,8 @@ class APIType(enum.IntEnum):
 
 
 class APIMixin:
+    """Mixin to define the basic API implementations"""
+
     def __init__(self, api_type: APIType):
         self.api_type = api_type
         self.api = self.api_ssl = None

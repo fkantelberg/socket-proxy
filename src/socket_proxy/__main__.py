@@ -6,7 +6,7 @@ import sys
 from configparser import ConfigParser
 from typing import Tuple
 
-from . import api, base, utils
+from . import api, base, event, utils
 from .proxy import ProxyServer
 from .tunnel_client import TunnelClient
 from .tunnel_gui import GUIClient
@@ -258,6 +258,26 @@ def logging_group(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def event_group(parser: argparse.ArgumentParser) -> None:
+    if not event.ClientSession:
+        return
+
+    group = parser.add_argument_group(
+        "Events and Hooks",
+        "Configure the event system and the hooks",
+    )
+    group.add_argument(
+        "--hook-url",
+        default=None,
+        help="Send events via an HTTP web hook as JSON data",
+    )
+    group.add_argument(
+        "--hook-token",
+        default=None,
+        help="Authentication token for the web hook. Uses bearer authentication",
+    )
+
+
 def option_group(parser: argparse.ArgumentParser, server: bool) -> None:
     group = parser.add_argument_group(
         "Additional options",
@@ -360,6 +380,7 @@ def parse_args(args: Tuple[str] = None) -> None:
     basic_group(client)
     security_group(client, False)
     connection_group(client, False)
+    event_group(client)
     option_group(client, False)
     logging_group(client)
 
@@ -371,6 +392,7 @@ def parse_args(args: Tuple[str] = None) -> None:
     basic_group(server, True)
     security_group(server, True)
     connection_group(server, True)
+    event_group(server)
     option_group(server, True)
     logging_group(server)
 

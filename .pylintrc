@@ -30,6 +30,7 @@ disable=raw-checker-failed,
         bad-mcs-classmethod-argument,
         too-few-public-methods,
         duplicate-code,
+        logging-fstring-interpolation,
 
 [IMPORTS]
 ignored-modules=aiohttp,pytest,socket_proxy

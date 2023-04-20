@@ -7,7 +7,7 @@ from asyncio import StreamReader, StreamWriter
 from datetime import datetime, timedelta
 from typing import Any, List, Tuple, Union
 
-from . import api, base, package, utils
+from . import api, base, event, package, utils
 from .tunnel_server import TunnelServer
 
 _logger = logging.getLogger(__name__)
@@ -49,6 +49,11 @@ class ProxyServer(api.APIMixin):
 
         self.authentication = authentication
         self.auth_timeout = auth_timeout
+        self.event = event.EventSystem(
+            event.EventType.Server,
+            url=base.config.hook_url,
+            token=base.config.hook_token,
+        )
 
         if isinstance(base.config.http_domain, str) and base.config.http_listen:
             self.http_host, self.http_port = base.config.http_listen
@@ -103,12 +108,16 @@ class ProxyServer(api.APIMixin):
             if t and token and t < dt:
                 self.tokens.pop(token, None)
                 changes = True
-                _logger.info("Invalidated token %s", token)
+                _logger.info(f"Invalidated token {token}")
+                await self.event.send(msg="token_invalidate", token=token)
 
         if self.authentication and not self.tokens:
             self.generate_token()
         elif changes:
             self._persist_state()
+
+        # Flush the event queue
+        await self.event.flush()
 
     def generate_token(self, hotp: bool = False) -> str:
         """Generate a new authentication token"""
@@ -122,6 +131,7 @@ class ProxyServer(api.APIMixin):
             token,
             "hotp" if hotp else "totp",
         )
+        self.event.send_nowait(msg="token_generate", token=token, hotp=bool(hotp))
         self._persist_state()
         return token
 
@@ -154,7 +164,13 @@ class ProxyServer(api.APIMixin):
             return
 
         # Create the tunnel object and generate an unique token
-        tunnel = TunnelServer(reader, writer, domain=self.http_domain, **self.kwargs)
+        tunnel = TunnelServer(
+            reader,
+            writer,
+            event=self.event,
+            domain=self.http_domain,
+            **self.kwargs,
+        )
 
         if self.authentication:
             # Expect the token as first package
@@ -168,9 +184,11 @@ class ProxyServer(api.APIMixin):
                 return
 
         self.tunnels[tunnel.uuid] = tunnel
+        await self.event.send(msg="tunnel_connect", tunnel=tunnel.uuid)
         try:
             await tunnel.loop()
         finally:
+            await self.event.send(msg="tunnel_disconnect", tunnel=tunnel.uuid)
             self.tunnels.pop(tunnel.uuid)
 
     async def _request(self, reader: StreamReader, writer: StreamWriter) -> None:
@@ -228,7 +246,7 @@ class ProxyServer(api.APIMixin):
         """Main server loop for the http socket"""
         host = self.http_host
         for h in host if isinstance(host, list) else [host]:
-            _logger.info("Serving on %s:%s [HTTP]", h, self.http_port)
+            _logger.info(f"Serving on {h}:{self.http_port} [HTTP]")
 
         self.http_proxy = await asyncio.start_server(
             self._request,
@@ -244,9 +262,11 @@ class ProxyServer(api.APIMixin):
         """Main server loop to wait for tunnels to open"""
         if self.http_domain_regex:
             asyncio.create_task(self.http_loop())
+            await self.event.send(msg="http_start")
 
         if self.api_port:
             asyncio.create_task(self.start_api())
+            await self.event.send(msg="api_start")
 
         asyncio.create_task(self._interval())
 
@@ -258,7 +278,9 @@ class ProxyServer(api.APIMixin):
         )
 
         for host in self.host if isinstance(self.host, list) else [self.host]:
-            _logger.info("Serving on %s:%s", host, self.port)
+            _logger.info(f"Serving on {host}:{self.port}")
+
+        await self.event.send(msg="proxy_start")
 
         async with self.server:
             await self.server.serve_forever()

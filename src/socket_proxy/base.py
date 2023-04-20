@@ -8,6 +8,7 @@ from typing import TypeVar, Union
 _logger = logging.getLogger(__name__)
 
 CLIENT_NAME_SIZE = 8
+EVENT_TIMEOUT = 0.5
 INTERVAL_TIME = 1
 DEFAULT_PORT = 2773
 DEFAULT_API_PORT = 7773
@@ -109,6 +110,8 @@ config = argparse.Namespace(
     http_domain=None,
     http_listen=("", DEFAULT_HTTP_PORT),
     http_ssl=False,
+    hook_token=None,
+    hook_url=None,
     idle_timeout=0,
     key=None,
     listen=("", DEFAULT_PORT),
