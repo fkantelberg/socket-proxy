@@ -63,7 +63,7 @@ class TunnelClient(tunnel.Tunnel, api.APIMixin):
         self.last_ping = time.time()
         await self.tunnel.tun_write(package.PingPackage(self.last_ping))
 
-    def _check_alive(self):
+    def _check_alive(self) -> bool:
         """Check if the connection is alive using the last ping"""
 
         if self.last_ping is None or self.last_pong is None:
@@ -76,7 +76,7 @@ class TunnelClient(tunnel.Tunnel, api.APIMixin):
 
     async def _client_loop(self, client: Connection) -> None:
         """This is the main client loop"""
-        _logger.info("Client %s connected", client.token.hex())
+        _logger.info(f"Client {client.token.hex()} connected")
         while True:
             data = await client.read(self.chunk_size)
             if not data:
@@ -168,7 +168,7 @@ class TunnelClient(tunnel.Tunnel, api.APIMixin):
 
         # Something unexpected happened
         if pkg is not None:
-            self.error("invalid package: %s", pkg)
+            self.error(f"invalid package: {pkg}")
             return await super()._handle()
 
         return await super()._handle()
@@ -190,8 +190,8 @@ class TunnelClient(tunnel.Tunnel, api.APIMixin):
         self.tunnel = await Connection.connect(self.host, self.port, ssl=self.sc)
         ssl_obj = self.tunnel.writer.get_extra_info("ssl_object")
         extra = f" [{ssl_obj.version()}]" if ssl_obj else ""
-        _logger.info("Tunnel %s:%s connected%s", self.host, self.port, extra)
-        _logger.info("Forwarding to %s:%s", self.dst_host, self.dst_port)
+        _logger.info(f"Tunnel {self.host}:{self.port} connected{extra}")
+        _logger.info(f"Forwarding to {self.dst_host}:{self.dst_port}")
 
         if self.api_port:
             asyncio.create_task(self.start_api())
@@ -214,7 +214,7 @@ class TunnelClient(tunnel.Tunnel, api.APIMixin):
         finally:
             self.running = False
             await self.stop()
-            _logger.info("Tunnel %s:%s closed", self.host, self.port)
+            _logger.info(f"Tunnel {self.host}:{self.port} closed")
 
     def start(self) -> None:
         """Start the client and the event loop"""

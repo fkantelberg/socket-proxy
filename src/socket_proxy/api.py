@@ -83,7 +83,7 @@ class APIMixin:
         extras = sorted(filter(None, extras))
         extras = f"[{','.join(extras)}]" if extras else ""
 
-        _logger.info("Starting API on %s:%s %s", self.api_host, self.api_port, extras)
+        _logger.info(f"Starting API on {self.api_host}:{self.api_port} {extras}")
         self.api = web.Application()
         self.api.add_routes(
             [

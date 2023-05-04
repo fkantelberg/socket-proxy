@@ -54,7 +54,7 @@ class Tunnel:
     def uuid(self) -> str:
         return self.tunnel.uuid
 
-    def get_config_dict(self):
+    def get_config_dict(self) -> dict:
         """Return the configuration as a dictionary used in the API or client"""
         return {
             "bantime": self.bantime or None,
@@ -104,10 +104,10 @@ class Tunnel:
         }
 
     def info(self, msg: str, *args) -> None:
-        _logger.info("Tunnel %s " + msg, self.uuid, *args)
+        _logger.info(f"Tunnel {self.uuid} {msg}", *args)
 
     def error(self, msg: str, *args) -> None:
-        _logger.error("Tunnel %s " + msg, self.uuid, *args)
+        _logger.error(f"Tunnel {self.uuid} {msg}", *args)
 
     def add(self, client: Connection) -> None:
         if client.token in self.clients:
@@ -147,7 +147,7 @@ class Tunnel:
             # Store the traffic information from the disconnecting clients
             self.bytes_in += client.bytes_in
             self.bytes_out += client.bytes_out
-            _logger.info("Client %s disconnected", token.hex())
+            _logger.info(f"Client {token.hex()} disconnected")
             await client.close()
 
     async def idle(self) -> None:

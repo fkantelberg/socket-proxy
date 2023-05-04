@@ -76,7 +76,7 @@ class ProtocolType(enum.IntEnum):
     TCP = 0x01
     HTTP = 0x02
 
-    def __str__(self):
+    def __str__(self) -> str:
         return {
             ProtocolType.TCP: "TCP",
             ProtocolType.HTTP: "HTTP",

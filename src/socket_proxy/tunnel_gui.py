@@ -4,7 +4,7 @@ import queue
 from logging.handlers import QueueHandler
 from typing import List
 
-from .base import LOG_FORMAT, InternetType
+from .base import LOG_FORMAT, InternetType, IPvXAddress
 from .tunnel_client import TunnelClient
 from .utils import format_transfer
 
@@ -32,6 +32,11 @@ class GUIClient(TunnelClient):
     def get_dimension(self) -> None:
         """Get the dimensions of the current window"""
         self.height, self.width = self.scr.getmaxyx()
+
+    # pylint: disable=W0613,R0201
+    def fmt_port(self, ip_type: InternetType, ip: IPvXAddress, port: int) -> str:
+        """Format an address"""
+        return f"{ip}:{port}" if ip else str(port)
 
     def _draw(self) -> None:
         """Draw all GUI elements"""
@@ -115,7 +120,8 @@ class GUIClient(TunnelClient):
         win.refresh()
         return win
 
-    def _draw_lines(self, win, lines: List[str]) -> None:  # pylint: disable=R0201
+    # disable: pylint=R0201
+    def _draw_lines(self, win: curses.window, lines: List[str]) -> None:
         """Draw multiple lines in a window with some border"""
         h, w = [k - 2 for k in win.getmaxyx()]
         for y, line in enumerate(lines[:h]):
@@ -127,7 +133,7 @@ class GUIClient(TunnelClient):
         self._draw()
         return await super()._handle()
 
-    def _gui(self, scr) -> None:
+    def _gui(self, scr: curses.window) -> None:
         """Configure the main screen"""
         self.scr = scr
         curses.noecho()

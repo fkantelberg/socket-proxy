@@ -410,7 +410,7 @@ def parse_args(args: Tuple[str] = None) -> None:
 def run_client(no_curses: bool) -> None:
     for arg in ["ca", "connect", "dst"]:
         if not getattr(base.config, arg, False):
-            _logger.critical("Missing --%s argument", arg)
+            _logger.critical(f"Missing --{arg} argument")
             sys.exit(1)
 
     cls = TunnelClient if no_curses else GUIClient
@@ -430,7 +430,7 @@ def run_client(no_curses: bool) -> None:
 def run_server() -> None:
     for arg in ["cert", "key"]:
         if not getattr(base.config, arg, False):
-            _logger.critical("Missing --%s argument", arg)
+            _logger.critical(f"Missing --{arg} argument")
             sys.exit(1)
 
     server = ProxyServer(

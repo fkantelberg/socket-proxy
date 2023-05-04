@@ -58,7 +58,7 @@ class TunnelServer(tunnel.Tunnel):
         for ip, ban in list(self.connections.items()):
             if ban.first < dt:
                 self.connections.pop(ip)
-                _logger.info("Connection number of %s resetted", ip)
+                _logger.info(f"Connection number of {ip} resetted")
 
     async def _client_accept(
         self,
@@ -76,7 +76,7 @@ class TunnelServer(tunnel.Tunnel):
             writer.close()
             await writer.wait_closed()
 
-            _logger.info("Connection from %s blocked", ip)
+            _logger.info(f"Connection from {ip} blocked")
             await self.event.send(msg="client_blocked", tunnel=self.uuid, ip=str(ip))
             return
 
@@ -86,7 +86,7 @@ class TunnelServer(tunnel.Tunnel):
         client = Connection(reader, writer, self.protocol, utils.generate_token())
         self.add(client)
 
-        _logger.info("Client %s connected on %s:%s", client.uuid, host, port)
+        _logger.info(f"Client {client.uuid} connected on {host}:{port}")
         await self.event.send(
             msg="client_connect",
             tunnel=self.uuid,
@@ -149,7 +149,7 @@ class TunnelServer(tunnel.Tunnel):
 
         # Initialize the tunnel by sending the appropiate data
         out = " ".join(sorted(f"{host}:{port}" for host, port in self.addr))
-        self.info("Listen on %s", out)
+        self.info(f"Listen on {out}")
 
         addr = [(base.InternetType.from_ip(ip), ip, port) for ip, port in self.addr]
         pkg = package.InitPackage(self.token, addr, self.domain)
@@ -168,10 +168,10 @@ class TunnelServer(tunnel.Tunnel):
                 self.error(f"Disabled protocol {self.protocol.name}")
                 return False
 
-            self.info("Using protocol: %s", self.protocol.name)
+            self.info(f"Using protocol: {self.protocol.name}")
 
             if self.protocol != base.ProtocolType.TCP:
-                self.info("Reachable with domain: %s", self.domain)
+                self.info(f"Reachable with domain: {self.domain}")
                 pkg = package.InitPackage(self.token, [], self.domain)
                 await self.tunnel.tun_write(pkg)
             elif not await self._open_server():
@@ -199,7 +199,7 @@ class TunnelServer(tunnel.Tunnel):
         if isinstance(pkg, package.ClientDataPackage):
             # Check for valid tokens
             if pkg.token not in self:
-                self.error("Invalid client token: %s", pkg.token)
+                self.error(f"Invalid client token: {pkg.token}")
                 return False
 
             conn = self[pkg.token]
@@ -208,7 +208,7 @@ class TunnelServer(tunnel.Tunnel):
 
         # Invalid package means to close the connection
         if pkg is not None:
-            self.error("Invalid package: %s", pkg)
+            self.error(f"Invalid package: {pkg}")
             return await super()._handle()
 
         return await super()._handle()
@@ -227,7 +227,7 @@ class TunnelServer(tunnel.Tunnel):
         """Main loop of the proxy tunnel"""
         ssl_obj = self.tunnel.writer.get_extra_info("ssl_object")
         extra = f" [{ssl_obj.version()}]" if ssl_obj else ""
-        self.info("Connected %s:%s%s", self.host, self.port, extra)
+        self.info(f"Connected {self.host}:{self.port}{extra}")
 
         try:
             await self._serve()

@@ -126,11 +126,8 @@ class ProxyServer(api.APIMixin):
 
         token = str(uuid.uuid4())
         self.tokens[token] = None if hotp else datetime.now()
-        _logger.info(
-            "Generated authentication token %s [%s]",
-            token,
-            "hotp" if hotp else "totp",
-        )
+        ttype = "hotp" if hotp else "totp"
+        _logger.info(f"Generated authentication token {token} [{ttype}]")
         self.event.send_nowait(msg="token_generate", token=token, hotp=bool(hotp))
         self._persist_state()
         return token
