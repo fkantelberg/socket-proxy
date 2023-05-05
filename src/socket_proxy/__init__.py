@@ -6,4 +6,4 @@ from .tunnel import Tunnel
 from .tunnel_client import TunnelClient
 from .tunnel_server import TunnelServer
 
-VERSION = "5.0.0"
+VERSION = "5.0.1"
