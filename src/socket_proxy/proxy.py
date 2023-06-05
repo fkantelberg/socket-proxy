@@ -4,6 +4,7 @@ import logging
 import re
 import uuid
 from asyncio import StreamReader, StreamWriter
+from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Any, List, Tuple, Union
 
@@ -37,7 +38,6 @@ class ProxyServer(api.APIMixin):
         self.max_tunnels = base.config.max_tunnels
         self.http_ssl = base.config.http_ssl
         self.tunnels = {}
-        self.tokens = {}
         self.sc = utils.generate_ssl_context(
             cert=cert,
             key=key,
@@ -47,8 +47,11 @@ class ProxyServer(api.APIMixin):
         )
         self.http_proxy = self.server = None
 
+        # Authentication
         self.authentication = authentication
+        self.tokens = defaultdict(dict)
         self.auth_timeout = auth_timeout
+
         self.event = event.EventSystem(
             event.EventType.Server,
             url=base.config.hook_url,
@@ -80,41 +83,42 @@ class ProxyServer(api.APIMixin):
             return
 
         # Restore the tokens
-        for tkn, dt in state.get("tokens", {}).items():
-            self.tokens[tkn] = datetime.fromisoformat(dt) if dt else None
+        self.tokens.clear()
 
-    def _persist_state(self, file: str = None) -> None:
+        # Stay compatible
+        for token, dt in state.get("tokens", {}).items():
+            ttype = base.AuthType.TOTP if dt else base.AuthType.HOTP
+            self.tokens[ttype][token] = base.AuthToken(dt)
+
+        for auth_type in base.AuthType:
+            for token, creation in state.get(f"tokens_{auth_type}", {}).items():
+                self.tokens[auth_type][token] = base.AuthToken(creation)
+
+    def _save_persisted_state(self, file: str = None) -> None:
         """Persist the internal state of the proxy server like tokens"""
         file = file or base.config.persist_state
         if not file:
             return
 
+        state = self.get_persistant_state_dict()
         with open(file, "w+", encoding="utf-8") as fp:
-            json.dump(
-                {
-                    "tokens": {
-                        tkn: dt.isoformat(" ") if dt else dt
-                        for tkn, dt in self.tokens.items()
-                    }
-                },
-                fp,
-            )
+            json.dump(state, fp)
 
     async def idle(self) -> None:
         """This methods will get called regularly to apply timeouts"""
         dt = datetime.now() - timedelta(seconds=self.auth_timeout)
         changes = False
-        for token, t in list(self.tokens.items()):
-            if t and token and t < dt:
-                self.tokens.pop(token, None)
+        for token, t in list(self.tokens[base.AuthType.TOTP].items()):
+            if t.creation < dt:
+                self.tokens[base.AuthType.TOTP].pop(token, None)
                 changes = True
                 _logger.info(f"Invalidated token {token}")
                 await self.event.send(msg="token_invalidate", token=token)
 
-        if self.authentication and not self.tokens:
+        if self.authentication and not self.tokens[base.AuthType.TOTP]:
             self.generate_token()
         elif changes:
-            self._persist_state()
+            self._save_persisted_state()
 
         # Flush the event queue
         await self.event.flush()
@@ -125,11 +129,12 @@ class ProxyServer(api.APIMixin):
             return None
 
         token = str(uuid.uuid4())
-        self.tokens[token] = None if hotp else datetime.now()
-        ttype = "hotp" if hotp else "totp"
-        _logger.info(f"Generated authentication token {token} [{ttype}]")
+        auth_type = base.AuthType.HOTP if hotp else base.AuthType.TOTP
+        self.tokens[auth_type][token] = base.AuthToken()
+
+        _logger.info(f"Generated authentication token {token} [{auth_type}]")
         self.event.send_nowait(msg="token_generate", token=token, hotp=bool(hotp))
-        self._persist_state()
+        self._save_persisted_state()
         return token
 
     async def _api_handle(self, path: Tuple[str], request: api.Request) -> Any:
@@ -143,12 +148,13 @@ class ProxyServer(api.APIMixin):
     def _verify_auth_token(self, pkg: package.AuthPackage) -> bool:
         """Verify an authentication package"""
         if pkg.token_type == base.AuthType.TOTP:
-            return pkg.token in {tk for tk, dt in self.tokens.items() if dt}
+            return pkg.token in self.tokens[base.AuthType.TOTP]
 
         if pkg.token_type == base.AuthType.HOTP:
-            for token, dt in self.tokens.items():
-                if dt is None and utils.hotp_verify(token, pkg.token):
-                    return True
+            return any(
+                utils.hotp_verify(token, pkg.token)
+                for token in self.tokens[base.AuthType.HOTP]
+            )
 
         return False
 
@@ -282,6 +288,15 @@ class ProxyServer(api.APIMixin):
         async with self.server:
             await self.server.serve_forever()
 
+    def get_persistant_state_dict(self) -> dict:
+        """Generate a dictionary with all persistance information"""
+        return {
+            f"tokens_{t}": {
+                token: t.creation.isoformat(" ") for token, t in self.tokens[t].items()
+            }
+            for t in base.AuthType
+        }
+
     def get_state_dict(self) -> dict:
         """Generate a dictionary which shows the current state of the server"""
         tunnels = {}
@@ -294,14 +309,18 @@ class ProxyServer(api.APIMixin):
             "port": self.http_port,
         }
 
+        state = self.get_persistant_state_dict()
+        # Stay compatible
+        state["tokens"] = {
+            **state["tokens_totp"],
+            **dict.fromkeys(state["tokens_hotp"], None),
+        }
         return {
+            **state,
             "http": http if self.http_domain else {},
             "tcp": {
                 "host": self.host,
                 "port": self.port,
-            },
-            "tokens": {
-                t: dt.isoformat(" ") if dt else dt for t, dt in self.tokens.items()
             },
             "tunnels": tunnels,
         }

@@ -33,7 +33,7 @@ class GUIClient(TunnelClient):
         """Get the dimensions of the current window"""
         self.height, self.width = self.scr.getmaxyx()
 
-    # pylint: disable=W0613,R0201
+    # pylint: disable=W0613
     def fmt_port(self, ip_type: InternetType, ip: IPvXAddress, port: int) -> str:
         """Format an address"""
         return f"{ip}:{port}" if ip else str(port)

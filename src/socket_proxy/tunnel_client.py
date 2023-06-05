@@ -22,6 +22,7 @@ class TunnelClient(tunnel.Tunnel, api.APIMixin):
         cert: str = None,
         key: str = None,
         auth_token: str = None,
+        client_id: str = None,
         **kwargs,
     ):
         super().__init__(api_type=api.APIType.Client, **kwargs)
@@ -32,6 +33,7 @@ class TunnelClient(tunnel.Tunnel, api.APIMixin):
         self.addr = []
         self.last_ping = self.last_pong = None
         self.auth_token = auth_token
+        self.client_id = client_id
 
         self.ping_enabled = base.config.ping
 

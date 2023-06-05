@@ -3,6 +3,7 @@ import enum
 import ipaddress
 import logging
 import os
+from datetime import datetime
 from typing import TypeVar, Union
 
 _logger = logging.getLogger(__name__)
@@ -46,10 +47,25 @@ class ReachedClientLimit(Exception):
 
 
 class AuthType(enum.IntEnum):
-    """Helper for authentication tokens"""
+    """Helper for authentication token types"""
 
     TOTP = 0x01
     HOTP = 0x02
+
+    def __str__(self) -> str:
+        return {AuthType.TOTP: "totp", AuthType.HOTP: "hotp"}.get(self.value)
+
+
+class AuthToken:
+    """Helper for authentication tokens"""
+
+    def __init__(self, dt: datetime = None):
+        if not dt:
+            self.creation = datetime.now()
+        elif isinstance(dt, str):
+            self.creation = datetime.fromisoformat(dt)
+        else:
+            self.creation = dt
 
 
 class InternetType(enum.IntEnum):

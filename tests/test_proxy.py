@@ -113,28 +113,31 @@ async def test_server_state_persistent():
             srv.generate_token()
             srv.generate_token(True)
 
-            srv._persist_state(fp.name)
+            srv._save_persisted_state(fp.name)
 
             fp.seek(0)
-            data = srv.tokens
-            srv.tokens = {}
+            data = srv.tokens[base.AuthType.TOTP]
+            srv.tokens[base.AuthType.TOTP] = {}
             srv._load_persisted_state(fp.name)
-            assert data == srv.tokens
-            assert srv.tokens
+            assert list(data) == list(srv.tokens[base.AuthType.TOTP])
+            assert srv.tokens[base.AuthType.TOTP]
 
 
 @pytest.mark.asyncio
 async def test_proxy_token_cleanup():
     (port,) = unused_ports(1)
     async with server(port) as srv:
-        srv.tokens["old-token"] = datetime(1970, 1, 1)
+        srv.authentication = False
+        srv.tokens[base.AuthType.TOTP]["old-token"] = base.AuthToken(
+            datetime(1970, 1, 1)
+        )
         await srv.idle()
-        assert "old-token" not in srv.tokens
-        assert not srv.tokens
+        assert "old-token" not in srv.tokens[base.AuthType.TOTP]
+        assert not srv.tokens[base.AuthType.TOTP]
 
         srv.authentication = True
         await srv.idle()
-        assert srv.tokens
+        assert srv.tokens[base.AuthType.TOTP]
 
 
 @pytest.mark.asyncio

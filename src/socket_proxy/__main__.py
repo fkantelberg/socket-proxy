@@ -25,7 +25,7 @@ class CustomHelpFormatter(argparse.HelpFormatter):
 
 
 def basic_group(parser: argparse.ArgumentParser, server: bool = False) -> None:
-    group = parser.add_argument_group("Security")
+    group = parser.add_argument_group("Basic")
     group.add_argument(
         "--config",
         default=None,

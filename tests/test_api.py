@@ -28,14 +28,14 @@ async def test_authenticated_tunnel_api():
         response = await srv._api_index(req_mock)
         token = response.text.strip().replace('"', "")
         assert response.status == 200
-        assert srv.tokens[token]
+        assert srv.tokens[base.AuthType.TOTP][token]
         await asyncio.sleep(0.1)
 
         req_mock = mock.AsyncMock(path="/api/token/hotp")
         response = await srv._api_index(req_mock)
         token = response.text.strip().replace('"', "")
         assert response.status == 200
-        assert srv.tokens[token] is None
+        assert token in srv.tokens[base.AuthType.HOTP]
         await asyncio.sleep(0.1)
 
         srv.authentication = False
