@@ -11,7 +11,7 @@ import ssl
 import sys
 from datetime import datetime, timedelta
 from random import shuffle
-from typing import Any, List, Set, Tuple, Union
+from typing import Any, List, Optional, Sequence, Set, Tuple, Union
 from urllib.parse import urlsplit
 
 from . import base
@@ -22,7 +22,9 @@ _logger = logging.getLogger(__name__)
 class ConfigArgumentParser(argparse.ArgumentParser):
     """Helper class for the configuration management"""
 
-    def _aggregate_actions(self, parser=None) -> dict:
+    def _aggregate_actions(
+        self, parser: Optional[argparse.ArgumentParser] = None
+    ) -> dict:
         result = {}
         for action in (parser or self)._actions:
             if isinstance(action, argparse._SubParsersAction):
@@ -34,8 +36,8 @@ class ConfigArgumentParser(argparse.ArgumentParser):
 
     def parse_with_config(
         self,
-        args: Tuple[str] = None,
-        config: dict = None,
+        args: Optional[Sequence[str]] = None,
+        config: Optional[dict] = None,
     ) -> argparse.Namespace:
         """Parse the arguments using additional configuration"""
         args = list(sys.argv[1:] if args is None else args[:])
@@ -73,23 +75,23 @@ class Ban:
         self.first = datetime.now()
 
 
-def configure_logging(log_file: str, level: str) -> None:
+def configure_logging(log_file: str, level_name: str) -> None:
     """Configure the logging"""
-    level = base.LOG_LEVELS.get(level.lower(), logging.DEBUG)
+    level = base.LOG_LEVELS.get(level_name.lower(), logging.DEBUG)
 
     log = logging.getLogger()
     log.setLevel(level)
 
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setLevel(logging.DEBUG)
-    handler.setFormatter(logging.Formatter(base.LOG_FORMAT, style="{"))
-    log.addHandler(handler)
+    stream_handler = logging.StreamHandler(sys.stdout)
+    stream_handler.setLevel(logging.DEBUG)
+    stream_handler.setFormatter(logging.Formatter(base.LOG_FORMAT, style="{"))
+    log.addHandler(stream_handler)
 
     if log_file:
-        handler = logging.FileHandler(log_file)
-        handler.setLevel(logging.DEBUG)
-        handler.setFormatter(logging.Formatter(base.LOG_FORMAT, style="{"))
-        log.addHandler(handler)
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(logging.Formatter(base.LOG_FORMAT, style="{"))
+        log.addHandler(file_handler)
 
 
 def format_port(ip_type: base.InternetType, ip: base.IPvXAddress, port: int) -> str:
@@ -117,12 +119,12 @@ def generate_token() -> bytes:
 
 def generate_ssl_context(
     *,
-    cert: str = None,
-    key: str = None,
-    ca: str = None,
-    crl: str = None,
+    cert: Optional[str] = None,
+    key: Optional[str] = None,
+    ca: Optional[str] = None,
+    crl: Optional[str] = None,
     server: bool = False,
-    ciphers: List[str] = None,
+    ciphers: Optional[str] = None,
     check_hostname: bool = False,
 ) -> ssl.SSLContext:
     """Generate a SSL context for the tunnel"""
@@ -162,13 +164,13 @@ def generate_ssl_context(
     # pylint: disable=no-member
     _logger.info(f"Minimal TLS Version: {ctx.minimum_version.name}")
 
-    ciphers = sorted(c["name"] for c in ctx.get_ciphers())
-    _logger.info(f"Ciphers: {', '.join(ciphers)}")
+    used_ciphers = sorted(c["name"] for c in ctx.get_ciphers())
+    _logger.info(f"Ciphers: {', '.join(used_ciphers)}")
 
     return ctx
 
 
-def get_unused_port(min_port: int, max_port: int, udp: bool = False) -> int:
+def get_unused_port(min_port: int, max_port: int, udp: bool = False) -> Optional[int]:
     """Returns a random unused port within the given range or None if all are used"""
     sock = socket.socket(type=socket.SOCK_DGRAM) if udp else socket.socket()
     ports = list(range(min_port, max_port + 1))
@@ -183,7 +185,7 @@ def get_unused_port(min_port: int, max_port: int, udp: bool = False) -> int:
     return None
 
 
-def hotp(initial: str, dt: datetime = None) -> str:
+def hotp(initial: str, dt: Optional[datetime] = None) -> str:
     """Generate the HOTP token for the specific time. The resolution is 1 min"""
     if dt is None:
         dt = datetime.utcnow()
@@ -214,17 +216,17 @@ def merge_settings(a: int, b: int) -> int:
     return min(a, b) if a and b else max(a, b)
 
 
-def optimize_networks(*networks: List[base.IPvXNetwork]) -> List[base.IPvXNetwork]:
+def optimize_networks(*networks: base.IPvXNetwork) -> base.IPvXNetworks:
     """Try to optimize the list of networks by using the minimal network
     configuration"""
 
     grouped = itertools.groupby(networks, lambda n: n.version)
     groups = {}
     for version, group in grouped:
-        group = sorted(set(group))
+        grp = sorted(set(group))
         tmp = set()
-        for i, a in enumerate(group):
-            for b in group[i + 1 :]:
+        for i, a in enumerate(grp):
+            for b in grp[i + 1 :]:
                 if b.subnet_of(a):
                     tmp.add(b)
                     break
@@ -236,7 +238,10 @@ def optimize_networks(*networks: List[base.IPvXNetwork]) -> List[base.IPvXNetwor
 
 
 def parse_address(
-    address: str, host: str = None, port: int = None, multiple: bool = False
+    address: str,
+    host: Optional[str] = None,
+    port: Optional[int] = None,
+    multiple: bool = False,
 ) -> Tuple[Union[str, List[str]], int]:
     """Parse an address and split hostname and port. The port is required. The
     default host is "" which means all"""
@@ -264,7 +269,7 @@ def parse_address(
     hosts = set()
     for h in data.get("hosts", "").split(","):
         if not h:
-            hosts.add(h or host)
+            hosts.add(h or host or "")
             continue
 
         try:
@@ -293,7 +298,7 @@ def parse_address(
     raise argparse.ArgumentTypeError("Invalid address parsed. Host required.")
 
 
-def parse_networks(network: str) -> List[base.IPvXNetwork]:
+def parse_networks(network: str) -> base.IPvXNetworks:
     """Try to parse multiple networks and return them optimized"""
     try:
         return optimize_networks(*map(ipaddress.ip_network, network.split(",")))
@@ -319,7 +324,7 @@ def to_bool(val: Any) -> bool:
     return bool(val)
 
 
-def traverse_dict(data: dict, *keys: Tuple[str]) -> Any:
+def traverse_dict(data: dict, *keys: str) -> Any:
     for key in filter(None, keys):
         if isinstance(data, dict) and key in data:
             data = data[key]
@@ -337,7 +342,7 @@ def valid_file(path: str) -> str:
     return path
 
 
-def valid_ports(ports: Tuple[int, int]) -> Tuple[int, int]:
+def valid_ports(ports: str) -> Tuple[int, int]:
     """Check if the argument is a valid port range with IP family"""
     m = re.match(r"^(\d+):(\d+)?$", ports, re.IGNORECASE)
     if m:

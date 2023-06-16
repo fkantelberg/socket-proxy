@@ -31,6 +31,7 @@ disable=raw-checker-failed,
         too-few-public-methods,
         duplicate-code,
         logging-fstring-interpolation,
+        attribute-defined-outside-init,
 
 [IMPORTS]
 ignored-modules=aiohttp,pytest,socket_proxy

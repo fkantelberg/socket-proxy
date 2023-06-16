@@ -2,6 +2,8 @@ import asyncio
 import logging
 import time
 from datetime import datetime
+from ipaddress import ip_network
+from typing import Any, Optional
 
 from . import base, package, utils
 from .connection import Connection
@@ -21,24 +23,26 @@ class Tunnel:
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.host = self.port = None
-        self.addr = []
-        self.tunnel = None
-        self.protocol = protocol
-        self.domain = domain or ""
+        self.host: Optional[str] = None
+        self.port: Optional[int] = None
+        self.addr: base.IPvXPorts = []
+        self.tunnel: Optional[Connection] = None
+        self.protocol: base.ProtocolType = protocol
+        self.domain: str = domain or ""
 
-        self.clients = {}
+        self.clients: dict[bytes, Connection] = {}
 
-        self.chunk_size = chunk_size
-        self.bantime = base.config.ban_time
-        self.max_clients = base.config.max_clients
-        self.max_connects = base.config.max_connects
-        self.idle_timeout = base.config.idle_timeout
-        self.networks = base.config.networks or []
+        self.chunk_size: int = chunk_size
+        self.bantime: int = base.config.ban_time
+        self.max_clients: int = base.config.max_clients
+        self.max_connects: int = base.config.max_connects
+        self.idle_timeout: int = base.config.idle_timeout
+        self.networks: base.IPvXNetworks = base.config.networks or []
 
         # Total bytes in/out for lost connections
-        self.bytes_in = self.bytes_out = 0
-        self.create_date = datetime.now()
+        self.bytes_in: int = 0
+        self.bytes_out: int = 0
+        self.create_date: datetime = datetime.now()
 
     def __contains__(self, token: bytes) -> bool:
         return token in self.clients
@@ -47,7 +51,7 @@ class Tunnel:
         return self.clients[token]
 
     @property
-    def token(self) -> str:
+    def token(self) -> bytes:
         return self.tunnel.token
 
     @property
@@ -103,10 +107,10 @@ class Tunnel:
             },
         }
 
-    def info(self, msg: str, *args) -> None:
+    def info(self, msg: str, *args: Any) -> None:
         _logger.info(f"Tunnel {self.uuid} {msg}", *args)
 
-    def error(self, msg: str, *args) -> None:
+    def error(self, msg: str, *args: Any) -> None:
         _logger.error(f"Tunnel {self.uuid} {msg}", *args)
 
     def add(self, client: Connection) -> None:
@@ -118,10 +122,10 @@ class Tunnel:
 
         self.clients[client.token] = client
 
-    def get(self, token: bytes) -> Connection:
+    def get(self, token: bytes) -> Optional[Connection]:
         return self.clients.get(token, None)
 
-    def pop(self, token: bytes) -> Connection:
+    def pop(self, token: bytes) -> Optional[Connection]:
         return self.clients.pop(token, None)
 
     def config_from_package(self, pkg: package.ConfigPackage) -> None:
@@ -133,7 +137,7 @@ class Tunnel:
         self.networks = utils.optimize_networks(*self.networks, *pkg.networks)
 
         # Just output the current configuration
-        networks = self.networks if self.networks else ["0.0.0.0/0", "::/0"]
+        networks = self.networks or [ip_network("0.0.0.0/0"), ip_network("::/0")]
         self.info(f"Allowed networks: {', '.join(map(str, networks))}")
         self.info(f"Ban time: {self.bantime or 'off'}")
         self.info(f"Clients: {self.max_clients or '-'}")

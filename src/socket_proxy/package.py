@@ -1,13 +1,25 @@
-import asyncio
 import ipaddress
 import logging
 import struct
-from typing import Any, List, Tuple, TypeVar, Union
+from typing import Any, Optional, Tuple
 
 from . import base
 
+try:
+    from typing import Protocol, Self
+except ImportError:
+    from typing_extensions import Protocol, Self  # type: ignore
+
+
 _logger = logging.getLogger(__name__)
 _package_registry = {}
+
+
+class Reader(Protocol):
+    """Protocol to read data from a reader"""
+
+    async def readexactly(self, length: int) -> bytes:
+        ...
 
 
 class MetaPackage(type):
@@ -36,25 +48,32 @@ class PackageStruct(struct.Struct):
 
     @classmethod
     def pack_string(cls, value: str) -> bytes:
-        value = value.encode()
-        return struct.pack("!I", len(value)) + value
+        bvalue = value.encode()
+        return struct.pack("!I", len(value)) + bvalue
 
-    async def read(self, reader: asyncio.StreamReader) -> Tuple[Any]:
+    async def read(self, reader: Reader) -> Tuple[Any, ...]:
         return self.unpack(await reader.readexactly(self.size))
 
     @classmethod
-    async def read_network(cls, reader: asyncio.StreamReader) -> base.IPvXNetwork:
+    async def read_network(cls, reader: Reader) -> base.IPvXNetwork:
         ip_type, prefixlen = await cls("!BB").read(reader)
-        if ip_type == base.InternetType.IPv4:
-            ip = ipaddress.IPv4Address(await reader.readexactly(4))
-        elif ip_type == base.InternetType.IPv6:
-            ip = ipaddress.IPv6Address(await reader.readexactly(16))
-        else:
-            raise base.InvalidPackage()
+        ip = await PackageStruct.read_ip(ip_type, reader)
         return ipaddress.ip_network(f"{ip}/{prefixlen}")
 
     @classmethod
-    async def read_string(cls, reader: asyncio.StreamReader) -> str:
+    async def read_ip(
+        cls, ip_type: base.InternetType, reader: Reader
+    ) -> base.IPvXAddress:
+        if ip_type == base.InternetType.IPv4:
+            return ipaddress.IPv4Address(await reader.readexactly(4))
+
+        if ip_type == base.InternetType.IPv6:
+            return ipaddress.IPv6Address(await reader.readexactly(16))
+
+        raise base.InvalidPackageType()
+
+    @classmethod
+    async def read_string(cls, reader: Reader) -> str:
         (length,) = await cls("!I").read(reader)
         return (await reader.readexactly(length)).decode()
 
@@ -66,8 +85,8 @@ class Package(metaclass=MetaPackage):
     Structure: <package type>
     """
 
-    _name = None
-    _type = None
+    _name: Optional[str] = None
+    _type: int = 0x00
     __slots__ = ()
 
     HEADER = PackageStruct("!B")
@@ -78,13 +97,13 @@ class Package(metaclass=MetaPackage):
 
     # pylint: disable=W0613
     @classmethod
-    async def recv(cls, reader: asyncio.StreamReader) -> Tuple[Any]:
+    async def recv(cls, reader: Reader) -> Tuple[Any, ...]:
         """Read the package from the reader and return a tuple. The tuple is
         getting passed to the constructor"""
         return ()
 
     @classmethod
-    async def from_reader(cls, reader: asyncio.StreamReader) -> TypeVar("Package"):
+    async def from_reader(cls, reader: Reader) -> Optional[Self]:
         """Read the package type and enforce the building of the package"""
         try:
             (ptype,) = await cls.HEADER.read(reader)
@@ -118,7 +137,7 @@ class ConnectPackage(Package):
         return super().to_bytes() + self.PROTOCOL.pack(self.protocol.value)
 
     @classmethod
-    async def recv(cls, reader: asyncio.StreamReader) -> Tuple[Any]:
+    async def recv(cls, reader: Reader) -> Tuple[Any, ...]:
         res = await super().recv(reader)
         (protocol,) = await cls.PROTOCOL.read(reader)
         return (base.ProtocolType(protocol),) + res
@@ -144,7 +163,7 @@ class PingPackage(Package):
         return super().to_bytes() + self.TIMESTAMP.pack(self.time)
 
     @classmethod
-    async def recv(cls, reader: asyncio.StreamReader) -> Tuple[Any]:
+    async def recv(cls, reader: Reader) -> Tuple[Any, ...]:
         res = await super().recv(reader)
         return await cls.TIMESTAMP.read(reader) + res
 
@@ -172,7 +191,7 @@ class AuthPackage(Package):
         )
 
     @classmethod
-    async def recv(cls, reader: asyncio.StreamReader) -> Tuple[Any]:
+    async def recv(cls, reader: Reader) -> Tuple[Any, ...]:
         res = await super().recv(reader)
         token = await PackageStruct.read_string(reader)
         (token_type,) = await PackageStruct("!B").read(reader)
@@ -197,7 +216,7 @@ class InitPackage(Package):
     def __init__(
         self,
         token: bytes,
-        addresses: List[base.IPvXAddress],
+        addresses: base.IPvXPorts,
         domain: str,
         *args,
         **kwargs,
@@ -209,15 +228,16 @@ class InitPackage(Package):
 
     def to_bytes(self) -> bytes:
         data = super().to_bytes() + self.INIT.pack(self.token, len(self.addresses))
-        for ip_type, ip, port in self.addresses:
+        for ip, port in self.addresses:
             if isinstance(ip, str):
                 ip = ipaddress.ip_address(ip)
 
+            ip_type = base.InternetType.from_ip(ip)
             data += self.ADDRESS.pack(ip_type, port) + ip.packed
         return data + PackageStruct.pack_string(self.domain)
 
     @classmethod
-    async def recv(cls, reader: asyncio.StreamReader) -> Tuple[Any]:
+    async def recv(cls, reader: Reader) -> Tuple[Any, ...]:
         res = await super().recv(reader)
         token, length = await cls.INIT.read(reader)
         addresses = []
@@ -257,7 +277,7 @@ class ConfigPackage(Package):
         clients: int,
         connects: int,
         idle_timeout: int,
-        networks: List[base.IPvXNetwork],
+        networks: base.IPvXNetworks,
         *args,
         **kwargs,
     ):
@@ -280,7 +300,7 @@ class ConfigPackage(Package):
         return super().to_bytes() + config + networks
 
     @classmethod
-    async def recv(cls, reader: asyncio.StreamReader) -> Tuple[Any]:
+    async def recv(cls, reader: Reader) -> Tuple[Any, ...]:
         res = await super().recv(reader)
         config = list(await cls.CONFIG.read(reader))
         config[-1] = [
@@ -310,7 +330,7 @@ class ClientPackage(Package):
         return super().to_bytes() + self.TOKEN.pack(self.token)
 
     @classmethod
-    async def recv(cls, reader: asyncio.StreamReader) -> Tuple[Any]:
+    async def recv(cls, reader: Reader) -> Tuple[Any, ...]:
         res = await super().recv(reader)
         return await cls.TOKEN.read(reader) + res
 
@@ -327,24 +347,19 @@ class ClientInitPackage(ClientPackage):
 
     IP = PackageStruct("!BH")
 
-    def __init__(self, ip: Union[bytes, str], port: int, *args, **kwargs):
+    def __init__(self, ip: base.IPvXAddress, port: int, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.ip, self.port = ip, port
 
     def to_bytes(self) -> bytes:
-        ip_type = base.InternetType.from_ip(self.ip)
+        ip_type: base.InternetType = base.InternetType.from_ip(self.ip)
         return super().to_bytes() + self.IP.pack(ip_type, self.port) + self.ip.packed
 
     @classmethod
-    async def recv(cls, reader: asyncio.StreamReader) -> Tuple[Any]:
+    async def recv(cls, reader: Reader) -> Tuple[Any, ...]:
         res = await super().recv(reader)
         ip_type, port = await cls.IP.read(reader)
-        if ip_type == base.InternetType.IPv4:
-            ip = ipaddress.IPv4Address(await reader.readexactly(4))
-        elif ip_type == base.InternetType.IPv6:
-            ip = ipaddress.IPv6Address(await reader.readexactly(16))
-        else:
-            raise base.InvalidPackageType()
+        ip = await PackageStruct.read_ip(ip_type, reader)
         return (ip, port) + res
 
 
@@ -386,7 +401,7 @@ class ClientDataPackage(ClientPackage):
         return data
 
     @classmethod
-    async def recv(cls, reader: asyncio.StreamReader) -> Tuple[Any]:
+    async def recv(cls, reader: Reader) -> Tuple[Any, ...]:
         res = await super().recv(reader)
         (length,) = await cls.DATA.read(reader)
         if length > cls.MAX_SIZE:

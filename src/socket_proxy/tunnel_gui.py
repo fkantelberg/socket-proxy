@@ -1,8 +1,9 @@
 import curses
 import logging
 import queue
+from ipaddress import ip_network
 from logging.handlers import QueueHandler
-from typing import List
+from typing import Any, List, Optional, Sequence
 
 from .base import LOG_FORMAT, InternetType, IPvXAddress
 from .tunnel_client import TunnelClient
@@ -14,17 +15,18 @@ _logger = logging.getLogger(__name__)
 class GUIClient(TunnelClient):
     """ncurses GUI for tunnel clients"""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any):
         super().__init__(*args, **kwargs)
-        self.options = 10
-        self.logs = []
-        self.width = self.height = 0
-        self.scr = None
+        self.options: int = 10
+        self.logs: List[str] = []
+        self.width: int = 0
+        self.height: int = 0
+        self.scr: Optional[Any] = None
         self.configure_logging()
 
     def configure_logging(self) -> None:
         """Reconfigure the logging to catch the messages for the GUI"""
-        self.log_queue = queue.Queue()
+        self.log_queue: queue.Queue = queue.Queue()
         self.log_handler = QueueHandler(self.log_queue)
         self.log_handler.setFormatter(logging.Formatter(LOG_FORMAT, style="{"))
         logging.getLogger().handlers = [self.log_handler]
@@ -74,7 +76,6 @@ class GUIClient(TunnelClient):
 
         self._draw_lines(win, lines)
         win.refresh()
-        return win
 
     def _draw_config(self) -> None:
         """Draw a box with the current tunnel configuration"""
@@ -84,7 +85,7 @@ class GUIClient(TunnelClient):
         win.border(0)
         win.addstr(0, 2, "Configuration")
 
-        networks = self.networks if self.networks else ["0.0.0.0/0", "::/0"]
+        networks = self.networks or [ip_network("0.0.0.0/0"), ip_network("::/0")]
         self._draw_lines(
             win,
             [
@@ -98,7 +99,6 @@ class GUIClient(TunnelClient):
             ],
         )
         win.refresh()
-        return win
 
     def _draw_log(self) -> None:
         """Draw a box with the latest logs"""
@@ -118,10 +118,9 @@ class GUIClient(TunnelClient):
         self._draw_lines(win, self.logs)
 
         win.refresh()
-        return win
 
     # disable: pylint=R0201
-    def _draw_lines(self, win: curses.window, lines: List[str]) -> None:
+    def _draw_lines(self, win: Any, lines: Sequence[str]) -> None:
         """Draw multiple lines in a window with some border"""
         h, w = [k - 2 for k in win.getmaxyx()]
         for y, line in enumerate(lines[:h]):
@@ -133,7 +132,7 @@ class GUIClient(TunnelClient):
         self._draw()
         return await super()._handle()
 
-    def _gui(self, scr: curses.window) -> None:
+    def _gui(self, scr: Any) -> None:
         """Configure the main screen"""
         self.scr = scr
         curses.noecho()

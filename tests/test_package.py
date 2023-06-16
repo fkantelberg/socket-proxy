@@ -13,7 +13,7 @@ def test_meta_package():
             _name = "duplicate"
             _type = package.InitPackage._type
 
-        assert not DuplicatePackage
+        assert DuplicatePackage._name
 
     class TestPackage(package.Package):
         _name = "test"

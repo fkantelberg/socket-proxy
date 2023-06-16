@@ -2,9 +2,15 @@ import asyncio
 import logging
 import time
 from datetime import datetime
-from typing import TypeVar
+from typing import Optional
 
 from . import base, package
+
+try:
+    from typing import Self
+except ImportError:
+    from typing_extensions import Self
+
 
 _logger = logging.getLogger(__name__)
 
@@ -17,16 +23,17 @@ class Connection:
         reader: asyncio.StreamReader,
         writer: asyncio.StreamWriter,
         protocol: base.ProtocolType = base.ProtocolType.TCP,
-        token: bytes = None,
+        token: Optional[bytes] = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.reader, self.writer = reader, writer
-        self.protocol = protocol
-        self.token = token or b""
-        self.bytes_in = self.bytes_out = 0
-        self.create_date = datetime.now()
-        self.last_time = time.time()
+        self.protocol: base.ProtocolType = protocol
+        self.token: bytes = token or b""
+        self.bytes_in: int = 0
+        self.bytes_out: int = 0
+        self.create_date: datetime = datetime.now()
+        self.last_time: float = time.time()
 
     @property
     def uuid(self) -> str:
@@ -37,9 +44,9 @@ class Connection:
         cls,
         host: str,
         port: int,
-        token: bytes = None,
+        token: Optional[bytes] = None,
         **kwargs,
-    ) -> TypeVar("Connection"):
+    ) -> Self:
         streams = await asyncio.open_connection(host, port, **kwargs)
         return cls(*streams, token=token)
 
@@ -59,7 +66,7 @@ class Connection:
         except Exception:
             pass
 
-    async def tun_read(self) -> package.Package:
+    async def tun_read(self) -> Optional[package.Package]:
         return await package.Package.from_reader(self)
 
     async def tun_write(self, pkg: package.Package) -> None:

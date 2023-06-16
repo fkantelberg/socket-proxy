@@ -1,7 +1,8 @@
 import asyncio
 import logging
+import ssl
 import time
-from typing import Tuple
+from typing import Any, Optional, Sequence, Tuple
 
 from . import api, base, package, tunnel, utils
 from .connection import Connection
@@ -19,25 +20,28 @@ class TunnelClient(tunnel.Tunnel, api.APIMixin):
         dst_host: str,
         dst_port: int,
         ca: str,
-        cert: str = None,
-        key: str = None,
-        auth_token: str = None,
-        client_id: str = None,
-        **kwargs,
+        cert: Optional[str] = None,
+        key: Optional[str] = None,
+        auth_token: Optional[str] = None,
+        client_id: Optional[str] = None,
+        **kwargs: Any,
     ):
         super().__init__(api_type=api.APIType.Client, **kwargs)
 
-        self.host, self.port = host, port
-        self.dst_host, self.dst_port = dst_host, dst_port
-        self.running = False
-        self.addr = []
-        self.last_ping = self.last_pong = None
-        self.auth_token = auth_token
-        self.client_id = client_id
+        self.host: str = host
+        self.port: int = port
+        self.dst_host: str = dst_host
+        self.dst_port: int = dst_port
+        self.running: bool = False
+        self.addr: Sequence[Tuple[base.IPvXAddress, int]] = []
+        self.last_ping: float = 0.0
+        self.last_pong: float = 0.0
+        self.auth_token: Optional[str] = auth_token
+        self.client_id: Optional[str] = client_id
 
-        self.ping_enabled = base.config.ping
+        self.ping_enabled: bool = base.config.ping
 
-        self.sc = utils.generate_ssl_context(
+        self.sc: ssl.SSLContext = utils.generate_ssl_context(
             cert=cert,
             key=key,
             ca=ca,
@@ -97,7 +101,7 @@ class TunnelClient(tunnel.Tunnel, api.APIMixin):
             except Exception:
                 pass
 
-    async def _connect_client(self, pkg: package.Package) -> None:
+    async def _connect_client(self, pkg: package.ClientInitPackage) -> None:
         """Handles the connection of a new client through the tunnel"""
         if pkg.token in self:
             return
@@ -111,10 +115,9 @@ class TunnelClient(tunnel.Tunnel, api.APIMixin):
             return
         except Exception:
             _logger.error("Client connection failed")
-            pkg = package.ClientClosePackage(pkg.token)
-            await self.tunnel.tun_write(pkg)
+            await self.tunnel.tun_write(package.ClientClosePackage(pkg.token))
 
-    async def _send_data(self, pkg: package.Package) -> None:
+    async def _send_data(self, pkg: package.ClientDataPackage) -> None:
         """Send data through the tunnel to the server side of the tunnel"""
         client = self.get(pkg.token)
         if client:
@@ -175,7 +178,7 @@ class TunnelClient(tunnel.Tunnel, api.APIMixin):
 
         return await super()._handle()
 
-    async def disconnect(self, *uuids: Tuple[str]) -> bool:
+    async def disconnect(self, *uuids: str) -> bool:
         """Disconnect a specific client"""
         if len(uuids) < 1:
             return False
@@ -210,8 +213,7 @@ class TunnelClient(tunnel.Tunnel, api.APIMixin):
 
                 await self.tunnel.tun_write(pkg)
 
-            pkg = package.ConnectPackage(self.protocol)
-            await self.tunnel.tun_write(pkg)
+            await self.tunnel.tun_write(package.ConnectPackage(self.protocol))
             await self._serve()
         finally:
             self.running = False

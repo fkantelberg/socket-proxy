@@ -1,10 +1,10 @@
 import asyncio
 import collections
-import ipaddress
 import logging
 from asyncio import StreamReader, StreamWriter
 from datetime import datetime, timedelta
-from typing import List, Tuple
+from ipaddress import ip_address
+from typing import List, Optional, Sequence, Tuple
 
 from . import base, package, tunnel, utils
 from .connection import Connection
@@ -23,20 +23,24 @@ class TunnelServer(tunnel.Tunnel):
         *,
         event: EventSystem,
         domain: str = "",
-        tunnel_host: str = None,
-        ports: Tuple[int, int] = None,
-        protocols: List[base.ProtocolType] = None,
+        tunnel_host: Optional[str] = None,
+        ports: Optional[Tuple[int, int]] = None,
+        protocols: Optional[List[base.ProtocolType]] = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.tunnel = Connection(reader, writer, token=utils.generate_token())
-        self.domain = f"{self.uuid}.{domain}" if domain else ""
         self.host, self.port = writer.get_extra_info("peername")[:2]
-        self.tunnel_host = tunnel_host.split(",") if tunnel_host else ""
-        self.tunnel_port = None
-        self.ports = ports
-        self.server = None
-        self.connections = collections.defaultdict(utils.Ban)
+        self.tunnel: Connection = Connection(
+            reader, writer, token=utils.generate_token()
+        )
+        self.domain: str = f"{self.uuid}.{domain}" if domain else ""
+        self.tunnel_host: Sequence[str] = tunnel_host.split(",") if tunnel_host else ""
+        self.tunnel_port: Optional[int] = None
+        self.ports: Optional[Tuple[int, int]] = ports
+        self.server: Optional[asyncio.Server] = None
+        self.connections: dict[base.IPvXAddress, utils.Ban] = collections.defaultdict(
+            utils.Ban
+        )
         self.protocols = protocols or utils.protocols()
         self.event = event
 
@@ -64,11 +68,11 @@ class TunnelServer(tunnel.Tunnel):
         self,
         reader: StreamReader,
         writer: StreamWriter,
-        read_ahead: bytes = None,
+        read_ahead: Optional[bytes] = None,
     ) -> None:
         """Accept new clients and inform the tunnel about connections"""
         host, port = writer.get_extra_info("peername")[:2]
-        ip = ipaddress.ip_address(host)
+        ip = ip_address(host)
 
         # Block connections using the networks
         if self.block(ip):
@@ -111,8 +115,7 @@ class TunnelServer(tunnel.Tunnel):
             await self.tunnel.tun_data(client.token, data)
 
         if self.server and self.server.is_serving():
-            pkg = package.ClientClosePackage(client.token)
-            await self.tunnel.tun_write(pkg)
+            await self.tunnel.tun_write(package.ClientClosePackage(client.token))
 
         await self._disconnect_client(client.token)
 
@@ -145,14 +148,14 @@ class TunnelServer(tunnel.Tunnel):
 
     async def _client_loop(self) -> None:
         """Main client loop initializing the client and managing the transmission"""
-        self.addr = [sock.getsockname()[:2] for sock in self.server.sockets]
+        addr = [sock.getsockname()[:2] for sock in self.server.sockets]
+        self.addr = [(ip_address(h), p) for h, p in addr]
 
         # Initialize the tunnel by sending the appropiate data
         out = " ".join(sorted(f"{host}:{port}" for host, port in self.addr))
         self.info(f"Listen on {out}")
 
-        addr = [(base.InternetType.from_ip(ip), ip, port) for ip, port in self.addr]
-        pkg = package.InitPackage(self.token, addr, self.domain)
+        pkg = package.InitPackage(self.token, self.addr, self.domain)
         await self.tunnel.tun_write(pkg)
 
         # Start listening
@@ -172,8 +175,9 @@ class TunnelServer(tunnel.Tunnel):
 
             if self.protocol != base.ProtocolType.TCP:
                 self.info(f"Reachable with domain: {self.domain}")
-                pkg = package.InitPackage(self.token, [], self.domain)
-                await self.tunnel.tun_write(pkg)
+                await self.tunnel.tun_write(
+                    package.InitPackage(self.token, [], self.domain)
+                )
             elif not await self._open_server():
                 return await super()._handle()
 
@@ -199,7 +203,7 @@ class TunnelServer(tunnel.Tunnel):
         if isinstance(pkg, package.ClientDataPackage):
             # Check for valid tokens
             if pkg.token not in self:
-                self.error(f"Invalid client token: {pkg.token}")
+                self.error(f"Invalid client token: {pkg.token!r}")
                 return False
 
             conn = self[pkg.token]

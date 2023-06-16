@@ -1,6 +1,6 @@
 import enum
 import logging
-from typing import Any, Tuple
+from typing import Any, Optional, Sequence
 
 from . import base, utils
 
@@ -8,7 +8,7 @@ try:
     from aiohttp import web
     from aiohttp.web import Request, Response
 except ImportError:
-    web = Request = Response = None
+    web = Request = Response = None  # type: ignore
 
 _logger = logging.getLogger(__name__)
 
@@ -22,9 +22,12 @@ class APIMixin:
     """Mixin to define the basic API implementations"""
 
     def __init__(self, api_type: APIType):
-        self.api_type = api_type
-        self.api = self.api_ssl = None
-        self.api_host = self.api_port = self.api_token = False
+        self.api_type: APIType = api_type
+        self.api: Optional[web.Application] = None
+        self.api_ssl: bool = False
+        self.api_host: Optional[str] = None
+        self.api_port: Optional[int] = None
+        self.api_token: Optional[str] = None
 
         if web is None:
             return
@@ -36,11 +39,12 @@ class APIMixin:
             self.api_token = f"Bearer {api_token}" if api_token else None
             self.api_host, self.api_port = base.config.api_listen
 
-    async def disconnect(self, *uuids: Tuple[str]) -> bool:
+    async def disconnect(self, *_uuids: str) -> bool:
         """Handle the disconnect over the API"""
+        return False
 
     # pylint: disable=W0613
-    async def _api_handle(self, path: Tuple[str], request: Request) -> Any:
+    async def _api_handle(self, path: Sequence[str], request: Request) -> Any:
         """Handle api functions"""
         return None
 
@@ -49,7 +53,7 @@ class APIMixin:
         if self.api_token and self.api_token != request.headers.get("Authorization"):
             raise web.HTTPForbidden()
 
-        path = tuple(filter(None, request.path.split("/")))
+        path: Sequence[str] = tuple(filter(None, request.path.split("/")))
         if "api" in path[:1]:
             data = await self._api_handle(path[1:], request)
             if data is not None:
@@ -69,7 +73,7 @@ class APIMixin:
         if self.api_token and self.api_token != request.headers.get("Authorization"):
             raise web.HTTPForbidden()
 
-        uuids = list(filter(None, request.path.split("/")))
+        uuids: Sequence[str] = list(filter(None, request.path.split("/")))
         if await self.disconnect(*uuids):
             raise web.HTTPOk()
         raise web.HTTPNotFound()
@@ -81,9 +85,9 @@ class APIMixin:
             "token" if self.api_token else "",
         ]
         extras = sorted(filter(None, extras))
-        extras = f"[{','.join(extras)}]" if extras else ""
+        flags = f"[{','.join(extras)}]" if extras else ""
 
-        _logger.info(f"Starting API on {self.api_host}:{self.api_port} {extras}")
+        _logger.info(f"Starting API on {self.api_host}:{self.api_port} {flags}")
         self.api = web.Application()
         self.api.add_routes(
             [
@@ -99,6 +103,6 @@ class APIMixin:
             access_log_format='%a "%r" %s %b "%{Referer}i" "%{User-Agent}i"',
             reuse_address=True,
             reuse_port=True,
-            print=None,
+            print=lambda *_x: None,
             ssl_context=self.sc if self.api_ssl else None,
         )

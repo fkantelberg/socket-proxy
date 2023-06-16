@@ -4,7 +4,7 @@ import ipaddress
 import logging
 import os
 from datetime import datetime
-from typing import TypeVar, Union
+from typing import Any, Optional, Sequence, Tuple
 
 _logger = logging.getLogger(__name__)
 
@@ -26,8 +26,12 @@ LOG_LEVELS = {
     "warning": logging.WARNING,
 }
 
-IPvXAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
-IPvXNetwork = Union[ipaddress.IPv4Network, ipaddress.IPv6Network]
+IPvXAddress = ipaddress._BaseAddress
+IPvXNetwork = ipaddress._BaseNetwork
+IPvXPort = Tuple[ipaddress._BaseAddress, int]
+IPvXAddresses = Sequence[ipaddress._BaseAddress]
+IPvXNetworks = Sequence[ipaddress._BaseNetwork]
+IPvXPorts = Sequence[IPvXPort]
 
 
 class InvalidPackage(Exception):
@@ -53,13 +57,13 @@ class AuthType(enum.IntEnum):
     HOTP = 0x02
 
     def __str__(self) -> str:
-        return {AuthType.TOTP: "totp", AuthType.HOTP: "hotp"}.get(self.value)
+        return {AuthType.TOTP: "totp", AuthType.HOTP: "hotp"}.get(self, "")
 
 
 class AuthToken:
     """Helper for authentication tokens"""
 
-    def __init__(self, dt: datetime = None):
+    def __init__(self, dt: Optional[datetime] = None):
         if not dt:
             self.creation = datetime.now()
         elif isinstance(dt, str):
@@ -74,8 +78,8 @@ class InternetType(enum.IntEnum):
     IPv4 = 0x01
     IPv6 = 0x02
 
-    @staticmethod
-    def from_ip(ip: Union[bytes, str]) -> TypeVar("InternetType"):
+    @classmethod
+    def from_ip(cls, ip: IPvXAddress) -> Any:
         if isinstance(ip, (bytes, str)):
             ip = ipaddress.ip_address(ip)
 
@@ -96,14 +100,14 @@ class ProtocolType(enum.IntEnum):
         return {
             ProtocolType.TCP: "TCP",
             ProtocolType.HTTP: "HTTP",
-        }[self.value]
+        }[self]
 
-    @staticmethod
-    def from_str(protocol: str) -> TypeVar("ProtocolType"):
+    @classmethod
+    def from_str(cls, protocol: str) -> Any:
         if protocol.upper() == "TCP":
-            return ProtocolType.TCP
+            return cls.TCP
         if protocol.upper() == "HTTP":
-            return ProtocolType.HTTP
+            return cls.HTTP
         raise ValueError("Invalid protocol")
 
 

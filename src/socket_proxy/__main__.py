@@ -4,7 +4,7 @@ import logging
 import os
 import sys
 from configparser import ConfigParser
-from typing import Tuple
+from typing import Optional, Tuple
 
 from . import api, base, event, utils
 from .proxy import ProxyServer
@@ -259,7 +259,7 @@ def logging_group(parser: argparse.ArgumentParser) -> None:
 
 
 def event_group(parser: argparse.ArgumentParser) -> None:
-    if not event.ClientSession:
+    if event.ClientSession is None:
         return
 
     group = parser.add_argument_group(
@@ -362,7 +362,7 @@ def option_group(parser: argparse.ArgumentParser, server: bool) -> None:
         )
 
 
-def parse_args(args: Tuple[str] = None) -> None:
+def parse_args(args: Optional[Tuple[str]] = None) -> argparse.Namespace:
     parser = utils.ConfigArgumentParser(
         formatter_class=CustomHelpFormatter,
         prog="",
@@ -447,7 +447,7 @@ def run_server() -> None:
     server.start()
 
 
-def main(args: Tuple[str] = None) -> None:
+def main(args: Optional[Tuple[str]] = None) -> None:
     base.config = parse_args(args)
 
     utils.configure_logging(base.config.log_file, base.config.log_level)

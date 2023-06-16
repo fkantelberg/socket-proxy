@@ -258,7 +258,7 @@ async def test_proxy_tunnel_limit():
 def test_start_functions():
     port, dst_port = unused_ports(2)
 
-    srv = proxy.ProxyServer("", port, None, None, None)
+    srv = proxy.ProxyServer("", port, cert=None, key=None)
     srv.loop = mock.AsyncMock()
     srv.start()
     assert srv.loop.call_count
@@ -376,15 +376,15 @@ async def test_tunnel_ping():
         cli.ping_enabled = False
         await cli.idle()
         await asyncio.sleep(0.1)
-        assert cli.last_ping is None
-        assert cli.last_pong is None
+        assert not cli.last_ping
+        assert not cli.last_pong
 
         # A ping is executed
         cli.ping_enabled = True
         await cli.idle()
         await asyncio.sleep(0.1)
-        assert cli.last_ping is not None
-        assert cli.last_pong is not None
+        assert cli.last_ping
+        assert cli.last_pong
 
         # Server sends pong and last_pong updates
         pkg = package.PingPackage(cli.last_ping + 1000)
@@ -392,7 +392,7 @@ async def test_tunnel_ping():
         await srv.tunnels[cli.uuid].tunnel.tun_write(pkg)
         await asyncio.sleep(0.1)
         assert cli._check_alive() is True
-        assert cli.last_pong is not None
+        assert cli.last_pong
 
         # Stop the tunnel if time out
         cli.last_ping, cli.last_pong = 0, 2 * base.INTERVAL_TIME

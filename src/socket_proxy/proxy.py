@@ -6,7 +6,7 @@ import uuid
 from asyncio import StreamReader, StreamWriter
 from collections import defaultdict
 from datetime import datetime, timedelta
-from typing import Any, List, Tuple, Union
+from typing import Any, List, Optional, Sequence, Union
 
 from . import api, base, event, package, utils
 from .tunnel_server import TunnelServer
@@ -24,20 +24,21 @@ class ProxyServer(api.APIMixin):
         self,
         host: Union[str, List[str]],
         port: int,
+        *,
         cert: str,
         key: str,
-        ca: str = None,
-        crl: str = None,
+        ca: Optional[str] = None,
+        crl: Optional[str] = None,
         authentication: bool = False,
         auth_timeout: int = 60,
-        **kwargs,
+        **kwargs: Any,
     ):
         super().__init__(api_type=api.APIType.Server)
         self.kwargs = kwargs
         self.host, self.port = host, port
         self.max_tunnels = base.config.max_tunnels
         self.http_ssl = base.config.http_ssl
-        self.tunnels = {}
+        self.tunnels: dict[str, TunnelServer] = {}
         self.sc = utils.generate_ssl_context(
             cert=cert,
             key=key,
@@ -45,11 +46,10 @@ class ProxyServer(api.APIMixin):
             crl=crl,
             server=True,
         )
-        self.http_proxy = self.server = None
 
         # Authentication
         self.authentication = authentication
-        self.tokens = defaultdict(dict)
+        self.tokens: defaultdict[base.AuthType, dict] = defaultdict(dict)
         self.auth_timeout = auth_timeout
 
         self.event = event.EventSystem(
@@ -58,6 +58,9 @@ class ProxyServer(api.APIMixin):
             token=base.config.hook_token,
         )
 
+        self.http_host: Optional[str] = None
+        self.http_port: Optional[str] = None
+        self.http_domain_regex: Optional[re.Pattern[bytes]] = None
         if isinstance(base.config.http_domain, str) and base.config.http_listen:
             self.http_host, self.http_port = base.config.http_listen
             self.http_domain = base.config.http_domain
@@ -65,12 +68,11 @@ class ProxyServer(api.APIMixin):
                 rb"^(.*)\.%s$" % self.http_domain.replace(".", r"\.").encode()
             )
         else:
-            self.http_host = self.http_port = False
-            self.http_domain = self.http_domain_regex = False
+            self.http_domain = ""
 
         self._load_persisted_state()
 
-    def _load_persisted_state(self, file: str = None) -> None:
+    def _load_persisted_state(self, file: Optional[str] = None) -> None:
         """Load the previously persisted state from the file"""
         file = file or base.config.persist_state
         if not file:
@@ -94,7 +96,7 @@ class ProxyServer(api.APIMixin):
             for token, creation in state.get(f"tokens_{auth_type}", {}).items():
                 self.tokens[auth_type][token] = base.AuthToken(creation)
 
-    def _save_persisted_state(self, file: str = None) -> None:
+    def _save_persisted_state(self, file: Optional[str] = None) -> None:
         """Persist the internal state of the proxy server like tokens"""
         file = file or base.config.persist_state
         if not file:
@@ -123,7 +125,7 @@ class ProxyServer(api.APIMixin):
         # Flush the event queue
         await self.event.flush()
 
-    def generate_token(self, hotp: bool = False) -> str:
+    def generate_token(self, hotp: bool = False) -> Optional[str]:
         """Generate a new authentication token"""
         if not self.authentication:
             return None
@@ -137,7 +139,7 @@ class ProxyServer(api.APIMixin):
         self._save_persisted_state()
         return token
 
-    async def _api_handle(self, path: Tuple[str], request: api.Request) -> Any:
+    async def _api_handle(self, path: Sequence[str], request: api.Request) -> Any:
         """Handle api functions"""
         if ("token", "hotp") == path[:2]:
             return self.generate_token(True)
@@ -325,7 +327,7 @@ class ProxyServer(api.APIMixin):
             "tunnels": tunnels,
         }
 
-    async def disconnect(self, *uuids: Tuple[str]) -> bool:
+    async def disconnect(self, *uuids: str) -> bool:
         """Disconnect a specific tunnel or client"""
         if len(uuids) < 1 or uuids[0] not in self.tunnels:
             return False
