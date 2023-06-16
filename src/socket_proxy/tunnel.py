@@ -3,7 +3,7 @@ import logging
 import time
 from datetime import datetime
 from ipaddress import ip_network
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 
 from . import base, package, utils
 from .connection import Connection
@@ -30,7 +30,7 @@ class Tunnel:
         self.protocol: base.ProtocolType = protocol
         self.domain: str = domain or ""
 
-        self.clients: dict[bytes, Connection] = {}
+        self.clients: Dict[bytes, Connection] = {}
 
         self.chunk_size: int = chunk_size
         self.bantime: int = base.config.ban_time

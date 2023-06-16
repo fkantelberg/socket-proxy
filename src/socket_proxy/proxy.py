@@ -6,7 +6,7 @@ import uuid
 from asyncio import StreamReader, StreamWriter
 from collections import defaultdict
 from datetime import datetime, timedelta
-from typing import Any, List, Optional, Sequence, Union
+from typing import Any, Dict, List, Optional, Sequence, Union
 
 from . import api, base, event, package, utils
 from .tunnel_server import TunnelServer
@@ -38,7 +38,7 @@ class ProxyServer(api.APIMixin):
         self.host, self.port = host, port
         self.max_tunnels = base.config.max_tunnels
         self.http_ssl = base.config.http_ssl
-        self.tunnels: dict[str, TunnelServer] = {}
+        self.tunnels: Dict[str, TunnelServer] = {}
         self.sc = utils.generate_ssl_context(
             cert=cert,
             key=key,
@@ -49,7 +49,7 @@ class ProxyServer(api.APIMixin):
 
         # Authentication
         self.authentication = authentication
-        self.tokens: defaultdict[base.AuthType, dict] = defaultdict(dict)
+        self.tokens: Dict[base.AuthType, dict] = defaultdict(dict)
         self.auth_timeout = auth_timeout
 
         self.event = event.EventSystem(
@@ -60,7 +60,7 @@ class ProxyServer(api.APIMixin):
 
         self.http_host: Optional[str] = None
         self.http_port: Optional[str] = None
-        self.http_domain_regex: Optional[re.Pattern[bytes]] = None
+        self.http_domain_regex: Optional[re.Pattern] = None
         if isinstance(base.config.http_domain, str) and base.config.http_listen:
             self.http_host, self.http_port = base.config.http_listen
             self.http_domain = base.config.http_domain
