@@ -140,7 +140,7 @@ class TunnelServer(tunnel.Tunnel):
 
         self.server = await asyncio.start_server(
             self._client_accept,
-            self.tunnel_host,
+            self.tunnel_host,  # type: ignore
             self.tunnel_port,
         )
         asyncio.create_task(self._client_loop())

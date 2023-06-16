@@ -277,7 +277,7 @@ class ProxyServer(api.APIMixin):
 
         self.server = await asyncio.start_server(
             self._accept,
-            self.host,
+            self.host,  # type: ignore
             self.port,
             ssl=self.sc,
         )
