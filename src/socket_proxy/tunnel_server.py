@@ -4,7 +4,7 @@ import logging
 from asyncio import StreamReader, StreamWriter
 from datetime import datetime, timedelta
 from ipaddress import ip_address
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from . import base, package, tunnel, utils
 from .connection import Connection
@@ -37,7 +37,8 @@ class TunnelServer(tunnel.Tunnel):
         self.tunnel_host: Sequence[str] = tunnel_host.split(",") if tunnel_host else ""
         self.tunnel_port: Optional[int] = None
         self.ports: Optional[Tuple[int, int]] = ports
-        self.server: Optional[asyncio.Server] = None
+        # Should by type Optional[asyncio.Server] but 3.8 fails
+        self.server: Any = None
         self.connections: Dict[base.IPvXAddress, utils.Ban] = collections.defaultdict(
             utils.Ban
         )
