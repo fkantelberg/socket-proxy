@@ -3,6 +3,7 @@ import argparse
 import logging
 import os
 import sys
+from argparse import Namespace
 from configparser import ConfigParser
 from typing import Optional, Tuple
 
@@ -362,7 +363,9 @@ def option_group(parser: argparse.ArgumentParser, server: bool) -> None:
         )
 
 
-def parse_args(args: Optional[Tuple[str]] = None) -> argparse.Namespace:
+def parse_args(
+    args: Optional[Tuple[str]] = None, namespace: Optional[Namespace] = None
+) -> Namespace:
     parser = utils.ConfigArgumentParser(
         formatter_class=CustomHelpFormatter,
         prog="",
@@ -396,7 +399,7 @@ def parse_args(args: Optional[Tuple[str]] = None) -> argparse.Namespace:
     option_group(server, True)
     logging_group(server)
 
-    parsed = parser.parse_args(args)
+    parsed = parser.parse_args(args, namespace=namespace)
     if not getattr(parsed, "config", None) or not parsed.mode:
         return parsed
 
@@ -448,7 +451,7 @@ def run_server() -> None:
 
 
 def main(args: Optional[Tuple[str]] = None) -> None:
-    base.config = parse_args(args)
+    parse_args(args, namespace=base.config)
 
     utils.configure_logging(base.config.log_file, base.config.log_level)
 

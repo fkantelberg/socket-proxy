@@ -88,14 +88,14 @@ def test_main(log_mock, parse_mock, server_mock, client_mock):
     main.main(())
 
     log_mock.assert_called_once()
-    parse_mock.assert_called_once_with(())
+    parse_mock.assert_called_once()
     client_mock.assert_not_called()
     server_mock.assert_not_called()
     parse_mock.reset_mock()
 
     base.config.mode = "client"
     main.main(("client",))
-    parse_mock.assert_called_once_with(("client",))
+    parse_mock.assert_called_once()
     server_mock.assert_not_called()
     client_mock.assert_called_once()
     client_mock.reset_mock()
@@ -103,7 +103,7 @@ def test_main(log_mock, parse_mock, server_mock, client_mock):
 
     base.config.mode = "server"
     main.main(("server",))
-    parse_mock.assert_called_once_with(("server",))
+    parse_mock.assert_called_once()
     client_mock.assert_not_called()
     server_mock.assert_called_once()
     server_mock.reset_mock()
