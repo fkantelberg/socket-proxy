@@ -8,6 +8,8 @@ from typing import Any, Optional, Sequence, Tuple
 
 _logger = logging.getLogger(__name__)
 
+VERSION = "5.0.3"
+
 CLIENT_NAME_SIZE = 8
 EVENT_TIMEOUT = 0.5
 INTERVAL_TIME = 1

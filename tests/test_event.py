@@ -3,7 +3,7 @@ import asyncio
 import pytest
 from aiohttp import web
 
-from socket_proxy import event
+from socket_proxy import api, event
 
 from .common import unused_ports
 
@@ -25,7 +25,7 @@ async def test_event_system():
 
     app = web.Application()
     app.add_routes([web.post("/", receive)])
-    asyncio.create_task(web._run_app(app, host="127.0.0.1", port=port))
+    asyncio.create_task(api.run_app(app, host="127.0.0.1", port=port))
     await asyncio.sleep(0.1)
 
     system = event.EventSystem(event.EventType.Server, url=None, token=None)

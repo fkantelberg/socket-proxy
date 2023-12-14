@@ -1,14 +1,16 @@
+import asyncio
 import enum
 import logging
+import ssl
 from typing import Any, Optional, Sequence
 
 from . import base, utils
 
 try:
     from aiohttp import web
-    from aiohttp.web import Request, Response
+    from aiohttp.web import AppRunner, Request, Response, TCPSite
 except ImportError:
-    web = Request = Response = None  # type: ignore
+    web = AppRunner = Request = Response = TCPSite = None  # type: ignore
 
 _logger = logging.getLogger(__name__)
 
@@ -18,12 +20,35 @@ class APIType(enum.IntEnum):
     Server = 0x02
 
 
+async def run_app(
+    api,
+    host: Optional[str] = None,
+    port: Optional[int] = None,
+    ssl_context: Optional[ssl.SSLContext] = None,
+) -> AppRunner:
+    app = AppRunner(
+        api,
+        access_log_format='%a "%r" %s %b "%{Referer}i" "%{User-Agent}i"',
+    )
+    await app.setup()
+
+    site = TCPSite(
+        app,
+        host=host,
+        port=port,
+        reuse_address=True,
+        reuse_port=True,
+        ssl_context=ssl_context,
+    )
+    await site.start()
+
+
 class APIMixin:
     """Mixin to define the basic API implementations"""
 
     def __init__(self, api_type: APIType):
         self.api_type: APIType = api_type
-        self.api: Optional[web.Application] = None
+        self.api: Optional[AppRunner] = None
         self.api_ssl: bool = False
         self.api_host: Optional[str] = None
         self.api_port: Optional[int] = None
@@ -96,13 +121,12 @@ class APIMixin:
             ]
         )
 
-        await web._run_app(
+        self.app = await run_app(
             self.api,
             host=self.api_host,
             port=self.api_port,
-            access_log_format='%a "%r" %s %b "%{Referer}i" "%{User-Agent}i"',
-            reuse_address=True,
-            reuse_port=True,
-            print=lambda *_x: None,
             ssl_context=self.sc if self.api_ssl else None,
         )
+
+        while True:
+            await asyncio.sleep(60)
