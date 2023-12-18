@@ -34,4 +34,4 @@ disable=raw-checker-failed,
         attribute-defined-outside-init,
 
 [IMPORTS]
-ignored-modules=aiohttp,pytest,socket_proxy
+ignored-modules=aiohttp,nox,pytest,socket_proxy
