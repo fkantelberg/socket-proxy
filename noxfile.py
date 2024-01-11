@@ -17,6 +17,7 @@ def py3(session):
         "pytest-xdist",
         "aiohttp",
         "coverage",
+        "typing_extensions",
     )
     session.run(
         "pytest",
