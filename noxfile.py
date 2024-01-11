@@ -19,6 +19,8 @@ def py3(session):
         "coverage",
         "typing_extensions",
     )
+    session.run("./certs.sh", "client", external=True)
+    session.run("./certs.sh", "server", external=True)
     session.run(
         "pytest",
         "--cov=src/socket_proxy",
