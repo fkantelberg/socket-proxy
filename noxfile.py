@@ -10,6 +10,8 @@ def clean(session):
 @nox.session()
 def py3(session):
     session.install(
+        "-e",
+        ".",
         "pytest",
         "pytest-asyncio",
         "pytest-cov",

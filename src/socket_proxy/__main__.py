@@ -451,9 +451,10 @@ def run_server() -> None:
 
 
 def main(args: Optional[Tuple[str]] = None) -> None:
-    parse_args(args, namespace=base.config)
+    base.config = parse_args(args, namespace=base.config)
 
     utils.configure_logging(base.config.log_file, base.config.log_level)
+    _logger.info(f"Version: {base.VERSION}")
 
     try:
         if base.config.mode == "server":
