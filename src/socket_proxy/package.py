@@ -18,8 +18,7 @@ _package_registry = {}
 class Reader(Protocol):
     """Protocol to read data from a reader"""
 
-    async def readexactly(self, length: int) -> bytes:
-        ...
+    async def readexactly(self, length: int) -> bytes: ...
 
 
 class MetaPackage(type):
