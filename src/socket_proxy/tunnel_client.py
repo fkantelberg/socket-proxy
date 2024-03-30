@@ -67,7 +67,7 @@ class TunnelClient(tunnel.Tunnel, api.APIMixin):
 
         # Send a ping regularly
         self.last_ping = time.time()
-        await self.tunnel.tun_write(package.PingPackage(self.last_ping))
+        await self.tunnel.tun_write(package.PingPackage(int(self.last_ping)))
 
     def _check_alive(self) -> bool:
         """Check if the connection is alive using the last ping"""
@@ -153,7 +153,7 @@ class TunnelClient(tunnel.Tunnel, api.APIMixin):
 
         # Handle a ping package and reply
         if isinstance(pkg, package.PingPackage):
-            self.last_pong = time.time()
+            self.last_pong = int(time.time())
             return True
 
         # A new client connected on the other side of the tunnel

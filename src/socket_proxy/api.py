@@ -8,9 +8,9 @@ from . import base, utils
 
 try:
     from aiohttp import web
-    from aiohttp.web import AppRunner, Request, Response, TCPSite
+    from aiohttp.web import Application, AppRunner, Request, Response, TCPSite
 except ImportError:
-    web = AppRunner = Request = Response = TCPSite = None  # type: ignore
+    web = Application = AppRunner = Request = Response = TCPSite = None  # type: ignore
 
 _logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ class APIType(enum.IntEnum):
 
 
 async def run_app(
-    api,
+    api: Application,
     host: Optional[str] = None,
     port: Optional[int] = None,
     ssl_context: Optional[ssl.SSLContext] = None,

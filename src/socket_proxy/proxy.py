@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import re
+import ssl
 import uuid
 from asyncio import StreamReader, StreamWriter
 from collections import defaultdict
@@ -34,12 +35,13 @@ class ProxyServer(api.APIMixin):
         **kwargs: Any,
     ):
         super().__init__(api_type=api.APIType.Server)
-        self.kwargs = kwargs
-        self.host, self.port = host, port
-        self.max_tunnels = base.config.max_tunnels
-        self.http_ssl = base.config.http_ssl
+        self.kwargs: Dict[str, Any] = kwargs
+        self.host: Union[str, List[str]] = host
+        self.port: int = port
+        self.max_tunnels: int = base.config.max_tunnels
+        self.http_ssl: bool = base.config.http_ssl
         self.tunnels: Dict[str, TunnelServer] = {}
-        self.sc = utils.generate_ssl_context(
+        self.sc: ssl.SSLContext = utils.generate_ssl_context(
             cert=cert,
             key=key,
             ca=ca,
@@ -48,16 +50,17 @@ class ProxyServer(api.APIMixin):
         )
 
         # Authentication
-        self.authentication = authentication
+        self.authentication: bool = authentication
         self.tokens: Dict[base.AuthType, dict] = defaultdict(dict)
-        self.auth_timeout = auth_timeout
+        self.auth_timeout: int = auth_timeout
 
-        self.event = event.EventSystem(
+        self.event: event.EventSystem = event.EventSystem(
             event.EventType.Server,
             url=base.config.hook_url,
             token=base.config.hook_token,
         )
 
+        self.http_domain: str = ""
         self.http_host: Optional[str] = None
         self.http_port: Optional[str] = None
         self.http_domain_regex: Optional[re.Pattern] = None
@@ -67,8 +70,6 @@ class ProxyServer(api.APIMixin):
             self.http_domain_regex = re.compile(
                 rb"^(.*)\.%s$" % self.http_domain.replace(".", r"\.").encode()
             )
-        else:
-            self.http_domain = ""
 
         self._load_persisted_state()
 

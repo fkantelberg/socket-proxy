@@ -11,7 +11,7 @@ import ssl
 import sys
 from datetime import datetime, timedelta
 from random import shuffle
-from typing import Any, List, Optional, Sequence, Set, Tuple, Union
+from typing import Any, List, Optional, Sequence, Tuple, Union
 from urllib.parse import urlsplit
 
 from . import base
@@ -306,7 +306,7 @@ def parse_networks(network: str) -> base.IPvXNetworks:
         raise argparse.ArgumentTypeError("Invalid network format") from e
 
 
-def protocols() -> Set[base.ProtocolType]:
+def protocols() -> List[base.ProtocolType]:
     result = set()
     for protocol in base.ProtocolType:
         name = f"no-{protocol.name.lower()}".replace("-", "_")
@@ -315,7 +315,7 @@ def protocols() -> Set[base.ProtocolType]:
 
     if not base.config.http_domain:
         result.discard(base.ProtocolType.HTTP)
-    return result
+    return list(result)
 
 
 def to_bool(val: Any) -> bool:

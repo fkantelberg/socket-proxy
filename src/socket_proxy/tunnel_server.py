@@ -42,8 +42,8 @@ class TunnelServer(tunnel.Tunnel):
         self.connections: Dict[base.IPvXAddress, utils.Ban] = collections.defaultdict(
             utils.Ban
         )
-        self.protocols = protocols or utils.protocols()
-        self.event = event
+        self.protocols: List[base.ProtocolType] = protocols or utils.protocols()
+        self.event: EventSystem = event
 
     def block(self, ip: base.IPvXAddress) -> bool:
         """Decide whether the ip should be blocked"""

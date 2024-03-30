@@ -154,9 +154,9 @@ class PingPackage(Package):
 
     TIMESTAMP = PackageStruct("!d")
 
-    def __init__(self, timestamp, *args, **kwargs):
+    def __init__(self, timestamp: int, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.time = timestamp
+        self.time: int = timestamp
 
     def to_bytes(self) -> bytes:
         return super().to_bytes() + self.TIMESTAMP.pack(self.time)
@@ -179,8 +179,8 @@ class AuthPackage(Package):
 
     def __init__(self, token: str, token_type: base.AuthType, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.token = token
-        self.token_type = token_type
+        self.token: str = token
+        self.token_type: base.AuthType = token_type
 
     def to_bytes(self) -> bytes:
         return (
@@ -221,9 +221,9 @@ class InitPackage(Package):
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
-        self.token = token
-        self.addresses = addresses[:255]
-        self.domain = domain
+        self.token: bytes = token
+        self.addresses: base.IPvXPorts = addresses[:255]
+        self.domain: str = domain
 
     def to_bytes(self) -> bytes:
         data = super().to_bytes() + self.INIT.pack(self.token, len(self.addresses))
@@ -281,11 +281,11 @@ class ConfigPackage(Package):
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
-        self.bantime = bantime
-        self.clients = clients
-        self.connects = connects
-        self.idle_timeout = idle_timeout
-        self.networks = networks
+        self.bantime: int = bantime
+        self.clients: int = clients
+        self.connects: int = connects
+        self.idle_timeout: int = idle_timeout
+        self.networks: base.IPvXNetworks = networks
 
     def to_bytes(self) -> bytes:
         config = self.CONFIG.pack(
@@ -323,7 +323,7 @@ class ClientPackage(Package):
 
     def __init__(self, token: bytes, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.token = token
+        self.token: bytes = token
 
     def to_bytes(self) -> bytes:
         return super().to_bytes() + self.TOKEN.pack(self.token)
@@ -348,7 +348,8 @@ class ClientInitPackage(ClientPackage):
 
     def __init__(self, ip: base.IPvXAddress, port: int, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.ip, self.port = ip, port
+        self.ip: base.IPvXAddress = ip
+        self.port: int = port
 
     def to_bytes(self) -> bytes:
         ip_type: base.InternetType = base.InternetType.from_ip(self.ip)
@@ -389,7 +390,7 @@ class ClientDataPackage(ClientPackage):
 
     def __init__(self, data: bytes, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.data = data
+        self.data: bytes = data
 
     def to_bytes(self) -> bytes:
         data = b""
