@@ -7,7 +7,6 @@ from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
-
 from socket_proxy import base, utils
 
 from .common import CA_CERT, CLIENT_CERT, CLIENT_KEY, CRL, SERVER_CERT, SERVER_KEY
@@ -72,14 +71,14 @@ def test_config_protocols():
     base.config.no_tcp = 0
     base.config.no_http = 0
     base.config.http_domain = "example.org"
-    assert utils.protocols() == {base.ProtocolType.TCP, base.ProtocolType.HTTP}
+    assert set(utils.protocols()) == {base.ProtocolType.TCP, base.ProtocolType.HTTP}
     base.config.no_tcp = 1
-    assert utils.protocols() == {base.ProtocolType.HTTP}
+    assert set(utils.protocols()) == {base.ProtocolType.HTTP}
     base.config.no_http = 1
-    assert utils.protocols() == set()
+    assert set(utils.protocols()) == set()
     base.config.no_http = 0
     base.config.http_domain = None
-    assert utils.protocols() == set()
+    assert set(utils.protocols()) == set()
 
 
 def test_configure_logging():
