@@ -155,9 +155,11 @@ async def test_close_exception():
 async def test_tunnel_with_dummy():
     # End to end test with an echo server
     port, dst_port = unused_ports(2)
-    async with echo_server(dst_port) as echo, server(port) as srv, client(
-        port, dst_port
-    ) as cli:
+    async with (
+        echo_server(dst_port) as echo,
+        server(port) as srv,
+        client(port, dst_port) as cli,
+    ):
         await asyncio.sleep(0.1)
         assert cli.addr
         for ip, port in cli.addr:
@@ -180,9 +182,11 @@ async def test_tunnel_with_dummy():
 async def test_http_tunnel_with_dummy():
     port, dst_port, http_port = unused_ports(3)
 
-    async with echo_server(dst_port) as echo, http_server(
-        port, http_port
-    ) as srv, http_client(port, dst_port):
+    async with (
+        echo_server(dst_port) as echo,
+        http_server(port, http_port) as srv,
+        http_client(port, dst_port),
+    ):
 
         async def connect_and_send(text):
             reader, writer = await asyncio.open_connection(

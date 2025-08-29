@@ -51,9 +51,12 @@ async def test_authenticated_tunnel_api():
 async def test_api_server():
     port, dst_port, api_port, http_port = unused_ports(4)
 
-    async with echo_server(dst_port), api_server(
-        port, http_port, api_port
-    ) as srv, client(port, dst_port) as cli, http_client(port, dst_port):
+    async with (
+        echo_server(dst_port),
+        api_server(port, http_port, api_port) as srv,
+        client(port, dst_port) as cli,
+        http_client(port, dst_port),
+    ):
 
         async def connect_and_send(ip, port):
             # Open a connection to get a client
@@ -130,9 +133,11 @@ async def test_api_server():
 async def test_api_client():
     port, dst_port, api_port, http_port = unused_ports(4)
 
-    async with echo_server(dst_port), server(port), api_client(
-        port, dst_port, http_port, api_port
-    ) as cli:
+    async with (
+        echo_server(dst_port),
+        server(port),
+        api_client(port, dst_port, http_port, api_port) as cli,
+    ):
 
         async def connect_and_send(ip, port):
             # Open a connection to get a client

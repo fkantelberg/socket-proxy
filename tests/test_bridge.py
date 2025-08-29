@@ -9,9 +9,11 @@ from .common import bridge, client, connect_and_send, echo_server, server, unuse
 @pytest.mark.asyncio
 async def test_bridge():
     port, dst_port = unused_ports(2)
-    async with echo_server(dst_port), server(port) as srv, client(
-        port, dst_port, protocol=base.ProtocolType.BRIDGE
-    ) as cli:
+    async with (
+        echo_server(dst_port),
+        server(port) as srv,
+        client(port, dst_port, protocol=base.ProtocolType.BRIDGE) as cli,
+    ):
         await asyncio.sleep(0.1)
 
         assert srv.bridge_servers

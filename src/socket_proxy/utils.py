@@ -9,7 +9,7 @@ import secrets
 import socket
 import ssl
 import sys
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from random import shuffle
 from typing import Any, List, Optional, Sequence, Tuple, Union
 from urllib.parse import urlsplit
@@ -188,7 +188,7 @@ def get_unused_port(min_port: int, max_port: int, udp: bool = False) -> Optional
 def hotp(initial: str, dt: Optional[datetime] = None) -> str:
     """Generate the HOTP token for the specific time. The resolution is 1 min"""
     if dt is None:
-        dt = datetime.now(UTC)
+        dt = datetime.now(timezone.utc)
 
     base = f"{initial}{dt.replace(second=0, microsecond=0).isoformat(' ')}"
     hashed = hashlib.sha512(base.encode()).hexdigest()
@@ -202,7 +202,7 @@ def hotp(initial: str, dt: Optional[datetime] = None) -> str:
 
 def hotp_verify(initial: str, token: str, window: int = 5) -> bool:
     """Verify a HOTP token based on a window"""
-    dt = datetime.now(UTC)
+    dt = datetime.now(timezone.utc)
     for i in range(-window, window + 1):
         if token == hotp(initial, dt + timedelta(minutes=i)):
             return True

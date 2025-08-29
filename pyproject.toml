@@ -18,10 +18,13 @@ line_length = 88
 [tool.mypy]
 disable_error_code = "attr-defined,import,union-attr"
 
-[tool.pylint.IMPORTS]
+[tool.pylint.main]
 ignored-modules = "aiohttp,nox,pytest,socket_proxy"
 
-[tool.pylint."MESSAGES CONTROL"]
+[tool.pylint.imports]
+ignored-modules = "aiohttp,nox,pytest,socket_proxy"
+
+[tool.pylint."messages control"]
 disable = """
   attribute-defined-outside-init,
   bad-inline-option,
@@ -51,7 +54,7 @@ disable = """
 [tool.ruff]
 line-length = 88
 indent-width = 4
-target-version = 'py38'
+target-version = 'py39'
 
 [tool.ruff.lint]
 ignore = ["E203", "E266", "E501", "F403", "F401"]
