@@ -3,7 +3,7 @@ import nox
 
 @nox.session()
 def clean(session):
-    session.install("coverage")
+    session.install("coverage[toml]")
     session.run("coverage", "erase")
 
 
@@ -18,7 +18,7 @@ def py3(session):
         "pytest-timeout",
         "pytest-xdist",
         "aiohttp",
-        "coverage",
+        "coverage[toml]",
         "typing_extensions",
     )
     session.run("./certs.sh", "client", external=True)
@@ -33,6 +33,6 @@ def py3(session):
 
 @nox.session()
 def report(session):
-    session.install("coverage")
+    session.install("coverage[toml]")
     session.run("coverage", "html")
     session.run("coverage", "report", "--fail-under=80")
