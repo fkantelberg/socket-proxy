@@ -3,7 +3,6 @@ from unittest import mock
 
 import pytest
 from aiohttp import ClientSession, web
-
 from socket_proxy import base
 
 from .common import (
@@ -65,7 +64,7 @@ async def test_api_server():
             # Get the client UUID
             async with session.get("/", headers=headers) as response:
                 data = await response.json()
-                clients = data["tunnels"][tuuid]["clients"]
+                clients = data["exposes"][tuuid]["clients"]
                 assert clients
                 cuuid = list(clients)[0]
 
@@ -87,7 +86,7 @@ async def test_api_server():
                 print(data)
                 print(srv.get_state_dict())
                 assert data == srv.get_state_dict()
-                assert len(data["tunnels"]) == 2
+                assert len(data["exposes"]) == 2
 
             async with session.get("/tcp") as response:
                 assert response.status == 200

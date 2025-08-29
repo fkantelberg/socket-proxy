@@ -6,11 +6,12 @@
 
 # socket-proxy
 
-This tool allows to forward TCP or HTTP ports to a server and make them available through the server.
-TCP ports will be mapped to ports of the server. HTTP forwarding is done with a simple reverse
-proxy using sub-domains. It consists of a client and server part. The server is listening for
-incoming connections from clients and creates additional listeners upon connection. These can be
-used to directly contact the TCP port set up as destination in the connecting client.
+This tool allows to forward TCP ports through a proxy server. The proxy server can expose
+the listening port directly or bridge the port between two clients allowing the bridge client
+to expose the listening port. Afterwards the applications can connect directly to the
+exposed ports like they were connected to the listening port. For easier handling
+HTTP ports can directly be addressed and the proxy server exposed those throw sub-domains
+as a simple reverse proxy.
 
 ### Security
 
@@ -24,28 +25,53 @@ like nginx with SSL and a wildcard certificate if HTTPS is required.
 - TLS encryption of the tunnel
 - Support for client certificates if CA is specified on the server
 - Support for token authentication. These tokens are rotating automatically
+- Bridge mode to allow to forward a port from one client to another bridge client
 - Support for IPv4 and IPv6
 - Proxy generic TCP ports or more specific HTTP servers
 - Limitation of number of tunnels, clients per tunnel, and connections per IP
 - Limit the access to specific IP's
 - Configuration on server and client side and negotiation of the used settings
-- Web API with support of bearer authentication
+- Web API with support of bearer authentication. The API allows to look into the proxy server, client or bridge client
+- Event system to send HTTP POST requests to a webhook with information about the event
 
 ### Usage
 
-1. Generate CA and certificates to be used on the server and client (e.g. using certs.sh of the package, easy-rsa, or openssl directly)
+The below examples are assuming the minimal necessary certificates. You can generate CA and
+certificates to be used on the server and client (e.g. using certs.sh of the package,
+easy-rsa, or openssl directly).
 
-2. Start a tunnel server using a certificate and matching private key
+#### Direct exposure on the proxy server
+
+1. Start a proxy server using a certificate and matching private key
 ```
 $ socket_proxy server --cert certificate.pem --key certificate.key
 ```
 
-3. Start a tunnel client and connect to a server. Tunnelled connections can access server reachable under TARGET:PORT
+2. Start a tunnel client and connect to a server. Tunnelled connections can access server reachable under TARGET:PORT
 ```
 $ socket_proxy client --ca ca.pem -c SERVER -d TARGET:PORT
 ```
 
-4. Connect clients to the opened ports on the server
+3. Connect clients to the opened ports on the server (see the log or the API for the correct port)
+
+#### Bridge mode and exposure on a bridge client
+
+1. Start a proxy server using a certificate and matching private key
+```
+$ socket_proxy server --cert certificate.pem --key certificate.key
+```
+
+2. Start a tunnel client and connect to a server. Tunnelled connections can access server reachable under TARGET:PORT. Additional we specify that we want to bridge it using `--protocol`. See the log or API for the bridge token
+```
+$ socket_proxy client --ca ca.pem -c SERVER -d TARGET:PORT --protocol bridge
+```
+
+3. Connect an additional client to bridge the port and expose it locally
+```
+$ socket_proxy bridge --ca ca.pem -c SERVER --bridge BRIDGE_TOKEN
+```
+
+4. Connect clients to the opened ports on the bridge client (see the log or the API for the correct port)
 
 ### Web API Client
 

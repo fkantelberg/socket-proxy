@@ -9,7 +9,7 @@ import secrets
 import socket
 import ssl
 import sys
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from random import shuffle
 from typing import Any, List, Optional, Sequence, Tuple, Union
 from urllib.parse import urlsplit
@@ -165,7 +165,7 @@ def generate_ssl_context(
     _logger.info(f"Minimal TLS Version: {ctx.minimum_version.name}")
 
     used_ciphers = sorted(c["name"] for c in ctx.get_ciphers())
-    _logger.info(f"Ciphers: {', '.join(used_ciphers)}")
+    _logger.info(f"Supported Ciphers: {', '.join(used_ciphers)}")
 
     return ctx
 
@@ -188,7 +188,7 @@ def get_unused_port(min_port: int, max_port: int, udp: bool = False) -> Optional
 def hotp(initial: str, dt: Optional[datetime] = None) -> str:
     """Generate the HOTP token for the specific time. The resolution is 1 min"""
     if dt is None:
-        dt = datetime.utcnow()
+        dt = datetime.now(UTC)
 
     base = f"{initial}{dt.replace(second=0, microsecond=0).isoformat(' ')}"
     hashed = hashlib.sha512(base.encode()).hexdigest()
@@ -202,7 +202,7 @@ def hotp(initial: str, dt: Optional[datetime] = None) -> str:
 
 def hotp_verify(initial: str, token: str, window: int = 5) -> bool:
     """Verify a HOTP token based on a window"""
-    dt = datetime.utcnow()
+    dt = datetime.now(UTC)
     for i in range(-window, window + 1):
         if token == hotp(initial, dt + timedelta(minutes=i)):
             return True
@@ -347,7 +347,7 @@ def valid_ports(ports: str) -> Tuple[int, int]:
     m = re.match(r"^(\d+):(\d+)?$", ports, re.IGNORECASE)
     if m:
         a, b = sorted(map(int, m.groups()))
-        if 0 < a < b < 65536:
+        if 0 < a <= b < 65536:
             return a, b
         raise argparse.ArgumentTypeError("Port must be in range (1, 65536)")
     raise argparse.ArgumentTypeError("Invalid port scheme.")

@@ -8,7 +8,7 @@ from typing import Any, Optional, Sequence, Tuple
 
 _logger = logging.getLogger(__name__)
 
-VERSION = "5.0.4"
+VERSION = "6.0.0"
 
 CLIENT_NAME_SIZE = 8
 EVENT_TIMEOUT = 0.5
@@ -52,6 +52,10 @@ class ReachedClientLimit(Exception):
     """The tunnel reached the maximum number of simultanous clients connected"""
 
 
+class NoConnection(Exception):
+    """Raised when a server can't build the connection properly"""
+
+
 class AuthType(enum.IntEnum):
     """Helper for authentication token types"""
 
@@ -91,17 +95,25 @@ class InternetType(enum.IntEnum):
             return InternetType.IPv6
         raise ipaddress.AddressValueError()
 
+    def localhost(self):
+        return {
+            InternetType.IPv4: "127.0.0.1",
+            InternetType.IPv6: "::1",
+        }[self]
+
 
 class ProtocolType(enum.IntEnum):
     """Helper class for supported protocols"""
 
     TCP = 0x01
     HTTP = 0x02
+    BRIDGE = 0x11
 
     def __str__(self) -> str:
         return {
             ProtocolType.TCP: "TCP",
             ProtocolType.HTTP: "HTTP",
+            ProtocolType.BRIDGE: "BRIDGE",
         }[self]
 
     @classmethod
@@ -110,6 +122,8 @@ class ProtocolType(enum.IntEnum):
             return cls.TCP
         if protocol.upper() == "HTTP":
             return cls.HTTP
+        if protocol.upper() == "BRIDGE":
+            return cls.BRIDGE
         raise ValueError("Invalid protocol")
 
 
@@ -123,6 +137,7 @@ config = argparse.Namespace(
     auth_timeout=900,
     auth_token=None,
     ban_time=60,
+    bridge=None,
     ca=None,
     cert=None,
     cipher=None,
@@ -152,4 +167,5 @@ config = argparse.Namespace(
     ports=None,
     protocol=ProtocolType.TCP,
     tunnel_host=None,
+    version=False,
 )

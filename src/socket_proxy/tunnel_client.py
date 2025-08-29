@@ -19,11 +19,12 @@ class TunnelClient(tunnel.Tunnel, api.APIMixin):
         port: int,
         dst_host: str,
         dst_port: int,
+        *,
         ca: str,
         cert: Optional[str] = None,
         key: Optional[str] = None,
         auth_token: Optional[str] = None,
-        client_id: Optional[str] = None,
+        name: Optional[str] = None,
         **kwargs: Any,
     ):
         super().__init__(api_type=api.APIType.Client, **kwargs)
@@ -37,7 +38,9 @@ class TunnelClient(tunnel.Tunnel, api.APIMixin):
         self.last_ping: float = 0.0
         self.last_pong: float = 0.0
         self.auth_token: Optional[str] = auth_token
-        self.client_id: Optional[str] = client_id
+        self.name: str = name or ""
+
+        self.bridge_token: Optional[str] = None
 
         self.ping_enabled: bool = base.config.ping
 
@@ -53,6 +56,14 @@ class TunnelClient(tunnel.Tunnel, api.APIMixin):
 
     def error(self, msg: str, *args) -> None:
         _logger.error(msg.capitalize(), *args)
+
+    def get_state_dict(self) -> dict:
+        state = super().get_state_dict()
+        if self.bridge_token:
+            state["bridge"] = {
+                "token": self.bridge_token,
+            }
+        return state
 
     async def idle(self) -> None:
         await super().idle()
@@ -82,7 +93,7 @@ class TunnelClient(tunnel.Tunnel, api.APIMixin):
 
     async def _client_loop(self, client: Connection) -> None:
         """This is the main client loop"""
-        _logger.info(f"Client {client.token.hex()} connected")
+        self.info(f"Client {client.token.hex()} connected")
         while True:
             data = await client.read(self.chunk_size)
             if not data:
@@ -114,7 +125,7 @@ class TunnelClient(tunnel.Tunnel, api.APIMixin):
             asyncio.create_task(self._client_loop(client))
             return
         except Exception:
-            _logger.error("Client connection failed")
+            self.error("Client connection failed")
             await self.tunnel.tun_write(package.ClientClosePackage(pkg.token))
 
     async def _send_data(self, pkg: package.ClientDataPackage) -> None:
@@ -123,11 +134,8 @@ class TunnelClient(tunnel.Tunnel, api.APIMixin):
         if client:
             await client.write(pkg.data)
 
-    async def _handle(self) -> bool:
+    async def handle_package(self, pkg: package.Package) -> bool:
         """Read a package from the tunnel and handle them properly"""
-        # We need the next package and try to evaluate it
-        pkg = await self.tunnel.tun_read()
-
         # The tunnel was initialized
         if isinstance(pkg, package.InitPackage):
             self.tunnel.token = pkg.token
@@ -144,6 +152,17 @@ class TunnelClient(tunnel.Tunnel, api.APIMixin):
 
             # Send the configuration to the server for negotiation
             await self._send_config()
+            return True
+
+        # Information about the server
+        if isinstance(pkg, package.InfoPackage):
+            self.info(f"Connected with {pkg.name!r} [{pkg.version}]")
+            return True
+
+        # The bridge was registered
+        if isinstance(pkg, package.BridgeInitPackage):
+            self.bridge_token = pkg.token
+            self.info(f"Bridge registered: {self.bridge_token}")
             return True
 
         # Configuration comes back from the server we use that
@@ -174,9 +193,9 @@ class TunnelClient(tunnel.Tunnel, api.APIMixin):
         # Something unexpected happened
         if pkg is not None:
             self.error(f"invalid package: {pkg}")
-            return await super()._handle()
+            return await super().handle_package(pkg)
 
-        return await super()._handle()
+        return await super().handle_package(pkg)
 
     async def disconnect(self, *uuids: str) -> bool:
         """Disconnect a specific client"""
@@ -195,8 +214,8 @@ class TunnelClient(tunnel.Tunnel, api.APIMixin):
         self.tunnel = await Connection.connect(self.host, self.port, ssl=self.sc)
         ssl_obj = self.tunnel.writer.get_extra_info("ssl_object")
         extra = f" [{ssl_obj.version()}]" if ssl_obj else ""
-        _logger.info(f"Tunnel {self.host}:{self.port} connected{extra}")
-        _logger.info(f"Forwarding to {self.dst_host}:{self.dst_port}")
+        self.info(f"Tunnel {self.host}:{self.port} connected{extra}")
+        self.info(f"Forwarding to {self.dst_host}:{self.dst_port}")
 
         if self.api_port:
             asyncio.create_task(self.start_api())
@@ -214,13 +233,14 @@ class TunnelClient(tunnel.Tunnel, api.APIMixin):
                 await self.tunnel.tun_write(pkg)
 
             await self.tunnel.tun_write(package.ConnectPackage(self.protocol))
+            await self.tunnel.tun_write(package.InfoPackage(base.VERSION, self.name))
             await self._serve()
         finally:
             self.running = False
             await self.stop()
-            _logger.info(f"Tunnel {self.host}:{self.port} closed")
+            self.info(f"Tunnel {self.host}:{self.port} closed")
 
-    def start(self) -> None:
+    async def start(self) -> None:
         """Start the client and the event loop"""
-        _logger.info("Starting client...")
-        asyncio.run(self.loop())
+        self.info("Starting client...")
+        await self.loop()

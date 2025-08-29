@@ -1,5 +1,0 @@
-[run]
-omit = */tunnel_gui.py
-source = */socket_proxy/*
-concurrency = multiprocessing
-parallel = True

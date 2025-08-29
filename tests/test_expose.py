@@ -3,8 +3,7 @@ from datetime import datetime
 from unittest import mock
 
 import pytest
-
-from socket_proxy import TunnelServer, base, package, utils
+from socket_proxy import ExposeServer, base, package, utils
 
 TCP_PORT = utils.get_unused_port(5000, 10000)
 
@@ -21,7 +20,7 @@ def init_test_server():
     writer.get_extra_info.return_value = ("127.0.0.1", TCP_PORT)
 
     base.config.max_connects = 1
-    server = TunnelServer(reader, writer, event=mock.AsyncMock())
+    server = ExposeServer(reader=reader, writer=writer, event=mock.AsyncMock())
     server.add = raiseAssert
     return server, reader, writer
 
@@ -77,24 +76,7 @@ async def test_tunnel_server_invalid_token():
     server, tun = init_test_server_tun()
     # Send a client data package with invalid token
     tun.return_value = package.ClientDataPackage(b"abc", b"\xff")
-    assert await server._handle() is False
-
-
-@pytest.mark.asyncio
-async def test_tunnel_server_protocols():
-    server, tun = init_test_server_tun()
-    # Test if the filtering of protocols works
-    server.protocols = [base.ProtocolType.TCP]
-    tun.return_value = package.ConnectPackage(base.ProtocolType.TCP)
-    assert await server._handle() is True
-
-    server.protocols = []
-    tun.return_value = package.ConnectPackage(base.ProtocolType.TCP)
-    assert await server._handle() is False
-
-    server.protocols = [base.ProtocolType.HTTP]
-    tun.return_value = package.ConnectPackage(base.ProtocolType.HTTP)
-    assert await server._handle() is True
+    assert await server.handle() is False
 
 
 @pytest.mark.asyncio
@@ -102,7 +84,7 @@ async def test_tunnel_server_packages():
     server, tun = init_test_server_tun()
     # Test an invalid package
     tun.return_value = package.Package()
-    assert await server._handle() is False
+    assert await server.handle() is False
 
     # Send a valid client data package
     token = b"\x00" * base.CLIENT_NAME_SIZE
@@ -119,4 +101,4 @@ async def test_tunnel_server_blocked_port():
     server.server = None
     server.protocols = [base.ProtocolType.TCP]
     tun.return_value = package.ConnectPackage(base.ProtocolType.TCP)
-    assert await server._handle() is False
+    assert await server.handle() is False

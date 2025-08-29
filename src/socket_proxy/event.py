@@ -22,10 +22,16 @@ class EventType(enum.IntEnum):
 class EventSystem:
     """Event system where events are send via hooks"""
 
-    def __init__(self, event_type: EventType, *, url: str, token: Optional[str] = None):
+    def __init__(
+        self,
+        event_type: EventType,
+        *,
+        url: Optional[str] = None,
+        token: Optional[str] = None,
+    ):
         self.event_type: EventType = event_type
         self.enabled: bool = bool(ClientSession is not None and url)
-        self.event_url: str = url if self.enabled else ""
+        self.event_url: str = url or "" if self.enabled else ""
         self.queue: Queue = Queue()
         self.event_token: Optional[str] = (
             f"Bearer {token}" if token and self.enabled else None

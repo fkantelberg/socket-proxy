@@ -3,7 +3,7 @@ import subprocess
 from contextlib import asynccontextmanager
 from unittest import mock
 
-from socket_proxy import TunnelClient, base, proxy, utils
+from socket_proxy import ExposeServer, TunnelClient, base, proxy, utils
 
 CA_CERT = "pki/ca.pem"
 CLIENT_CERT = "pki/client.pem"
@@ -29,6 +29,18 @@ def unused_ports(n, min_port=5000, max_port=10000):
     return [utils.get_unused_port(min_port, max_port) for _ in range(n)]
 
 
+async def connect_and_send(ip, port, text):
+    reader, writer = await asyncio.open_connection(ip, port)
+    writer.write(text)
+    await writer.drain()
+    await asyncio.sleep(0.1)
+
+    data = await reader.read(1024)
+    writer.close()
+    await writer.wait_closed()
+    return data
+
+
 @asynccontextmanager
 async def echo_server(port):
     async def accept(reader, writer):
@@ -43,7 +55,7 @@ async def echo_server(port):
         async with server:
             await server.serve_forever()
 
-    server = await asyncio.start_server(accept, host="", port=port)
+    server = await asyncio.start_server(accept, host="127.0.0.1", port=port)
     event_loop = asyncio.get_event_loop()
     event_loop.create_task(loop(server))
     await asyncio.sleep(0.1)
@@ -56,9 +68,10 @@ async def echo_server(port):
 @asynccontextmanager
 async def server(port):
     base.config.api = False
+    base.config.no_verify_hostname = True
 
     server = proxy.ProxyServer(
-        host="",
+        host="127.0.0.1",
         port=port,
         cert=SERVER_CERT,
         key=SERVER_KEY,
@@ -75,17 +88,42 @@ async def server(port):
 
 
 @asynccontextmanager
-async def client(port, dst_port):
+async def bridge(port, bridge_token):
     base.config.api = False
+    base.config.no_verify_hostname = True
+
+    server = await ExposeServer.connect_bridge(
+        host="127.0.0.1",
+        port=port,
+        bridge_token=bridge_token,
+        ca=CA_CERT,
+        cert=CLIENT_CERT,
+        key=CLIENT_KEY,
+    )
+
+    server._interval = mock.AsyncMock()
+    event_loop = asyncio.get_event_loop()
+    event_loop.create_task(server.loop())
+    await asyncio.sleep(0.1)
+    yield server
+    await server.stop()
+    await asyncio.sleep(0.1)
+
+
+@asynccontextmanager
+async def client(port, dst_port, protocol=None):
+    base.config.api = False
+    base.config.no_verify_hostname = True
 
     client = TunnelClient(
-        host="localhost",
+        host="127.0.0.1",
         port=port,
-        dst_host="localhost",
+        dst_host="127.0.0.1",
         dst_port=dst_port,
         cert=CLIENT_CERT,
         key=CLIENT_KEY,
         ca=CA_CERT,
+        protocol=protocol or base.ProtocolType.TCP,
     )
     client._interval = mock.AsyncMock()
     event_loop = asyncio.get_event_loop()
@@ -103,7 +141,7 @@ async def http_server(port, http_port):
     base.config.http_listen = "127.0.0.1", http_port
 
     server = proxy.ProxyServer(
-        host="",
+        host="127.0.0.1",
         port=port,
         cert=SERVER_CERT,
         key=SERVER_KEY,
@@ -127,7 +165,7 @@ async def api_server(port, http_port, api_port):
     base.config.http_listen = "127.0.0.1", http_port
 
     server = proxy.ProxyServer(
-        host="",
+        host="127.0.0.1",
         port=port,
         cert=SERVER_CERT,
         key=SERVER_KEY,
@@ -151,9 +189,9 @@ async def api_client(port, dst_port, http_port, api_port):
     base.config.http_listen = "127.0.0.1", http_port
 
     client = TunnelClient(
-        host="localhost",
+        host="127.0.0.1",
         port=port,
-        dst_host="localhost",
+        dst_host="127.0.0.1",
         dst_port=dst_port,
         cert=CLIENT_CERT,
         key=CLIENT_KEY,
@@ -173,9 +211,9 @@ async def http_client(port, dst_port):
     base.config.api = False
 
     client = TunnelClient(
-        host="localhost",
+        host="127.0.0.1",
         port=port,
-        dst_host="localhost",
+        dst_host="127.0.0.1",
         dst_port=dst_port,
         cert=CLIENT_CERT,
         key=CLIENT_KEY,

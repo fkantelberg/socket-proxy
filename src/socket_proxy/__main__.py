@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import asyncio
 import logging
 import os
 import sys
@@ -8,6 +9,7 @@ from configparser import ConfigParser
 from typing import Optional, Tuple
 
 from . import api, base, event, utils
+from .expose_server import ExposeServer
 from .proxy import ProxyServer
 from .tunnel_client import TunnelClient
 from .tunnel_gui import GUIClient
@@ -25,7 +27,7 @@ class CustomHelpFormatter(argparse.HelpFormatter):
         return f"{'/'.join(action.option_strings)} {args_string}"
 
 
-def basic_group(parser: argparse.ArgumentParser, server: bool = False) -> None:
+def basic_group(parser: argparse.ArgumentParser, mode: str = "") -> None:
     group = parser.add_argument_group("Basic")
     group.add_argument(
         "--config",
@@ -33,7 +35,7 @@ def basic_group(parser: argparse.ArgumentParser, server: bool = False) -> None:
         type=argparse.FileType(),
         help="Load everything from a configuration file",
     )
-    if server:
+    if mode == "server":
         group.add_argument(
             "--persist-state",
             default=None,
@@ -41,16 +43,16 @@ def basic_group(parser: argparse.ArgumentParser, server: bool = False) -> None:
         )
 
 
-def security_group(parser: argparse.ArgumentParser, server: bool) -> None:
+def security_group(parser: argparse.ArgumentParser, mode: str = "") -> None:
     group = parser.add_argument_group("Security")
 
     text_ca = ["CA certificate to use."]
     text_cert = ["Certificate to use for establishing the connection."]
     text_key = ["Private key for the certificate."]
 
-    if server:
+    if mode == "server":
         text_ca.append("Will enforce client certificates.")
-    else:
+    elif mode == "client":
         a = "Required if the target server enforces the client certificates."
         text_cert.append(a)
         text_key.append(a)
@@ -83,7 +85,7 @@ def security_group(parser: argparse.ArgumentParser, server: bool) -> None:
         help="Ciphers to use for the TLS connection.",
     )
 
-    if server:
+    if mode == "server":
         group.add_argument(
             "--crl",
             default=None,
@@ -91,7 +93,7 @@ def security_group(parser: argparse.ArgumentParser, server: bool) -> None:
             type=utils.valid_file,
             help="CRL certificates to use.",
         )
-    else:
+    elif mode in ("client", "bridge"):
         group.add_argument(
             "--no-verify-hostname",
             action="store_true",
@@ -100,9 +102,9 @@ def security_group(parser: argparse.ArgumentParser, server: bool) -> None:
         )
 
 
-def connection_group(parser: argparse.ArgumentParser, server: bool) -> None:
+def connection_group(parser: argparse.ArgumentParser, mode: str = "") -> None:
     group = parser.add_argument_group("Connection")
-    if server:
+    if mode == "server":
         group.add_argument(
             "-l",
             "--listen",
@@ -164,7 +166,7 @@ def connection_group(parser: argparse.ArgumentParser, server: bool) -> None:
                 action="store_true",
                 help=f"Disable the ability to forward {protocol.name} ports",
             )
-    else:
+    elif mode in ("client", "bridge"):
         group.add_argument(
             "-c",
             "--connect",
@@ -175,22 +177,29 @@ def connection_group(parser: argparse.ArgumentParser, server: bool) -> None:
             help=f"The address to connect with host[:port]. Required for clients. "
             f"(default: {base.DEFAULT_PORT})",
         )
-        group.add_argument(
-            "-d",
-            "--dst",
-            default=None,
-            dest="dst",
-            metavar="[host]:port",
-            type=lambda x: utils.parse_address(x, host="localhost"),
-            help="Target host and port for the connection. If the host is not "
-            "given localhost will be used.",
-        )
-        group.add_argument(
-            "--protocol",
-            default=base.ProtocolType.TCP,
-            type=base.ProtocolType.from_str,
-            help="Select the protocol to be used. (default: tcp)",
-        )
+        if mode == "client":
+            group.add_argument(
+                "-d",
+                "--dst",
+                default=None,
+                dest="dst",
+                metavar="[host]:port",
+                type=lambda x: utils.parse_address(x, host="localhost"),
+                help="Target host and port for the connection. If the host is not "
+                "given localhost will be used.",
+            )
+            group.add_argument(
+                "--protocol",
+                default=base.ProtocolType.TCP,
+                type=base.ProtocolType.from_str,
+                help="Select the protocol to be used. (default: tcp)",
+            )
+        if mode == "bridge":
+            group.add_argument(
+                "--bridge",
+                default=None,
+                help="Bridge token from the client to correct to the correct one",
+            )
         group.add_argument(
             "--auth-token",
             default=None,
@@ -233,7 +242,7 @@ def connection_group(parser: argparse.ArgumentParser, server: bool) -> None:
             f"them by comma. If the port is not given the server will listen on "
             f"port {base.DEFAULT_API_PORT}.",
         )
-        if server:
+        if mode == "server":
             group.add_argument(
                 "--api-no-ssl",
                 dest="api_ssl",
@@ -279,7 +288,7 @@ def event_group(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def option_group(parser: argparse.ArgumentParser, server: bool) -> None:
+def option_group(parser: argparse.ArgumentParser, mode: str = "") -> None:
     group = parser.add_argument_group(
         "Additional options",
         "If the tunnel server and client set the options the minimal value will be "
@@ -322,7 +331,20 @@ def option_group(parser: argparse.ArgumentParser, server: bool) -> None:
         help="Define comma separated networks in CIDR to allow only specific "
         "clients to connect to the server. (default: any)",
     )
-    if server:
+    if mode in ("bridge", "server"):
+        group.add_argument(
+            "--tunnel-host",
+            default=None,
+            help="The IP the tunnels listen on. Supports the usage of commas to "
+            "listen on different IPs. Each IP gets a different port. If not specified "
+            "the tunnels will listen on 2 ports for all IPv4 and IPv6 connections.",
+        )
+        group.add_argument(
+            "--ports",
+            type=utils.valid_ports,
+            help="Range of ports to use for the sockets.",
+        )
+    if mode == "server":
         group.add_argument(
             "--auth-timeout",
             type=int,
@@ -336,19 +358,7 @@ def option_group(parser: argparse.ArgumentParser, server: bool) -> None:
             help="Maximum number of tunnels. Only useful in server mode. "
             "(default: %(default)s)",
         )
-        group.add_argument(
-            "--tunnel-host",
-            default=None,
-            help="The IP the tunnels listen on. Supports the usage of commas to "
-            "listen on different IPs. Each IP gets a different port. If not specified "
-            "the tunnels will listen on 2 ports for all IPv4 and IPv6 connections.",
-        )
-        group.add_argument(
-            "--ports",
-            type=utils.valid_ports,
-            help="Range of ports to use for the sockets.",
-        )
-    else:
+    elif mode == "client":
         group.add_argument(
             "--no-curses",
             default="TERM" not in os.environ,
@@ -371,6 +381,12 @@ def parse_args(
         prog="",
         description="",
     )
+    parser.add_argument(
+        "-v",
+        "--version",
+        action="store_true",
+        help="Print the version and exit",
+    )
     logging_group(parser)
 
     sub = parser.add_subparsers(dest="mode")
@@ -381,10 +397,10 @@ def parse_args(
         help="Enter client mode connect to a server building the tunnel.",
     )
     basic_group(client)
-    security_group(client, False)
-    connection_group(client, False)
+    security_group(client, "client")
+    connection_group(client, "client")
     event_group(client)
-    option_group(client, False)
+    option_group(client, "client")
     logging_group(client)
 
     server = sub.add_parser(
@@ -392,12 +408,24 @@ def parse_args(
         formatter_class=CustomHelpFormatter,
         help="Enter server mode and listen for incoming clients to build the tunnels.",
     )
-    basic_group(server, True)
-    security_group(server, True)
-    connection_group(server, True)
+    basic_group(server, "server")
+    security_group(server, "server")
+    connection_group(server, "server")
     event_group(server)
-    option_group(server, True)
+    option_group(server, "server")
     logging_group(server)
+
+    bridge = sub.add_parser(
+        name="bridge",
+        formatter_class=CustomHelpFormatter,
+        help="Enter bridge mode to create local listening ports",
+    )
+    basic_group(bridge, "bridge")
+    security_group(bridge, "bridge")
+    connection_group(bridge, "bridge")
+    event_group(bridge)
+    option_group(bridge, "bridge")
+    logging_group(bridge)
 
     parsed = parser.parse_args(args, namespace=namespace)
     if not getattr(parsed, "config", None) or not parsed.mode:
@@ -410,15 +438,13 @@ def parse_args(
     return parser.parse_with_config(args, dict(cp.items(parsed.mode)))
 
 
-def run_client(no_curses: bool) -> None:
+async def run_client(no_curses: bool) -> None:
     for arg in ["ca", "connect", "dst"]:
         if not getattr(base.config, arg, False):
             _logger.critical(f"Missing --{arg} argument")
             sys.exit(1)
 
-    cls = TunnelClient if no_curses else GUIClient
-
-    cli = cls(
+    cli = (TunnelClient if no_curses else GUIClient)(
         *base.config.connect,
         *base.config.dst,
         ca=base.config.ca,
@@ -427,10 +453,10 @@ def run_client(no_curses: bool) -> None:
         protocol=base.config.protocol,
         auth_token=base.config.auth_token,
     )
-    cli.start()
+    await cli.start()
 
 
-def run_server() -> None:
+async def run_server() -> None:
     for arg in ["cert", "key"]:
         if not getattr(base.config, arg, False):
             _logger.critical(f"Missing --{arg} argument")
@@ -447,20 +473,44 @@ def run_server() -> None:
         authentication=base.config.authentication,
         auth_timeout=base.config.auth_timeout,
     )
-    server.start()
+    await server.start()
+
+
+async def run_bridge() -> None:
+    for arg in ["bridge", "connect", "ca"]:
+        if not getattr(base.config, arg, False):
+            _logger.critical(f"Missing --{arg} argument")
+            sys.exit(1)
+
+    bridge = await ExposeServer.connect_bridge(
+        *base.config.connect,
+        bridge_token=base.config.bridge,
+        ca=base.config.ca,
+        cert=base.config.cert,
+        key=base.config.key,
+        tunnel_host=base.config.tunnel_host,
+        ports=base.config.ports,
+    )
+
+    await bridge.start()
 
 
 def main(args: Optional[Tuple[str]] = None) -> None:
     base.config = parse_args(args, namespace=base.config)
+    if base.config.version:
+        print(base.VERSION)
+        return
 
     utils.configure_logging(base.config.log_file, base.config.log_level)
     _logger.info(f"Version: {base.VERSION}")
 
     try:
         if base.config.mode == "server":
-            run_server()
+            asyncio.run(run_server())
         elif base.config.mode == "client":
-            run_client(base.config.no_curses)
+            asyncio.run(run_client(base.config.no_curses))
+        elif base.config.mode == "bridge":
+            asyncio.run(run_bridge())
     except KeyboardInterrupt:
         _logger.info("Shutting down")
 

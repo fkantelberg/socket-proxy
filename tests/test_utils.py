@@ -71,10 +71,16 @@ def test_config_protocols():
     base.config.no_tcp = 0
     base.config.no_http = 0
     base.config.http_domain = "example.org"
-    assert set(utils.protocols()) == {base.ProtocolType.TCP, base.ProtocolType.HTTP}
+    assert set(utils.protocols()) == {
+        base.ProtocolType.TCP,
+        base.ProtocolType.HTTP,
+        base.ProtocolType.BRIDGE,
+    }
     base.config.no_tcp = 1
-    assert set(utils.protocols()) == {base.ProtocolType.HTTP}
+    assert set(utils.protocols()) == {base.ProtocolType.HTTP, base.ProtocolType.BRIDGE}
     base.config.no_http = 1
+    assert set(utils.protocols()) == {base.ProtocolType.BRIDGE}
+    base.config.no_bridge = 1
     assert set(utils.protocols()) == set()
     base.config.no_http = 0
     base.config.http_domain = None

@@ -28,8 +28,6 @@ def py3(session):
         "--cov=src/socket_proxy",
         "--cov-append",
         "-n=4",
-        "--asyncio-mode=auto",
-        "--timeout=5",
     )
 
 

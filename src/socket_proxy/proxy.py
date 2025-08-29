@@ -10,7 +10,9 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Sequence, Union
 
 from . import api, base, event, package, utils
-from .tunnel_server import TunnelServer
+from .bridge_server import BridgeServer
+from .connection import Connection
+from .expose_server import ExposeServer
 
 _logger = logging.getLogger(__name__)
 
@@ -19,7 +21,7 @@ HTTPRequestStatus = re.compile(rb"^(\S+)\s+(\S+)\s+(\S+)$")
 
 class ProxyServer(api.APIMixin):
     """Main proxy server which creates a TLS socket and listens for clients.
-    If clients connect the server will start a TunnelServer"""
+    If clients connect the server will start a BridgeServer or ExposeServer"""
 
     def __init__(
         self,
@@ -32,15 +34,16 @@ class ProxyServer(api.APIMixin):
         crl: Optional[str] = None,
         authentication: bool = False,
         auth_timeout: int = 60,
+        protocols: Optional[List[base.ProtocolType]] = None,
         **kwargs: Any,
     ):
         super().__init__(api_type=api.APIType.Server)
-        self.kwargs: Dict[str, Any] = kwargs
+        self.expose_kwargs: Dict[str, Any] = kwargs
         self.host: Union[str, List[str]] = host
         self.port: int = port
         self.max_tunnels: int = base.config.max_tunnels
         self.http_ssl: bool = base.config.http_ssl
-        self.tunnels: Dict[str, TunnelServer] = {}
+
         self.sc: ssl.SSLContext = utils.generate_ssl_context(
             cert=cert,
             key=key,
@@ -49,6 +52,13 @@ class ProxyServer(api.APIMixin):
             server=True,
         )
 
+        # Tunnels
+        self.expose_servers: Dict[str, ExposeServer] = {}
+        self.bridge_servers: Dict[str, BridgeServer] = {}
+
+        # Protocols
+        self.protocols: List[base.ProtocolType] = protocols or utils.protocols()
+
         # Authentication
         self.authentication: bool = authentication
         self.tokens: Dict[base.AuthType, dict] = defaultdict(dict)
@@ -56,8 +66,8 @@ class ProxyServer(api.APIMixin):
 
         self.event: event.EventSystem = event.EventSystem(
             event.EventType.Server,
-            url=base.config.hook_url,
-            token=base.config.hook_token,
+            url=getattr(base.config, "hook_url", None),
+            token=getattr(base.config, "hook_token", None),
         )
 
         self.http_domain: str = ""
@@ -163,24 +173,17 @@ class ProxyServer(api.APIMixin):
 
     async def _accept(self, reader: StreamReader, writer: StreamWriter) -> None:
         """Accept new tunnels and start to listen for clients"""
+        # pylint: disable=R0912
 
         # Limit the number of tunnels
-        if 0 < self.max_tunnels <= len(self.tunnels):
+        if 0 < self.max_tunnels <= len(self.expose_servers):
             await self.close(reader, writer)
             return
 
-        # Create the tunnel object and generate an unique token
-        tunnel = TunnelServer(
-            reader,
-            writer,
-            event=self.event,
-            domain=self.http_domain,
-            **self.kwargs,
-        )
-
+        tunnel = Connection(reader, writer)
         if self.authentication:
             # Expect the token as first package
-            pkg = await tunnel.tunnel.tun_read()
+            pkg = await tunnel.tun_read()
             if not isinstance(pkg, package.AuthPackage):
                 await self.close(reader, writer)
                 return
@@ -189,13 +192,62 @@ class ProxyServer(api.APIMixin):
                 await self.close(reader, writer)
                 return
 
-        self.tunnels[tunnel.uuid] = tunnel
-        await self.event.send(msg="tunnel_connect", tunnel=tunnel.uuid)
+        # First package decides the type of the server
+        server: Optional[Union[BridgeServer, ExposeServer]]
+
+        pkg = await tunnel.tun_read()
+        if isinstance(pkg, package.BridgeLinkPackage):
+            server = self.bridge_servers.get(pkg.token)
+            if not server:
+                await self.close(reader, writer)
+                return
+
+            if not await server.add_bridge(tunnel):
+                await self.close(reader, writer)
+
+            return
+
+        if isinstance(pkg, package.ConnectPackage):
+            if pkg.protocol not in self.protocols:
+                _logger.error(f"Disabled protocol {pkg.protocol.name}")
+                await self.close(reader, writer)
+                return
+
+            if pkg.protocol == base.ProtocolType.BRIDGE:
+                server = BridgeServer(
+                    tunnel=tunnel,
+                    event=self.event,
+                )
+                self.bridge_servers[server.uuid] = server
+            else:
+                server = ExposeServer(
+                    tunnel=tunnel,
+                    event=self.event,
+                    domain=self.http_domain,
+                    **self.expose_kwargs,
+                )
+                self.expose_servers[server.uuid] = server
+
+        else:
+            # Unexpected package
+            await self.close(reader, writer)
+            return
+
+        # Server is connected after the first package was handled correctly
+        if not await server.handle_package(pkg):
+            await self.close(reader, writer)
+            self.expose_servers.pop(server.uuid, None)
+            self.bridge_servers.pop(server.uuid, None)
+            return
+
+        await self.event.send(msg="server_connect", tunnel=server.uuid)
         try:
-            await tunnel.loop()
+            await server.loop()
         finally:
-            await self.event.send(msg="tunnel_disconnect", tunnel=tunnel.uuid)
-            self.tunnels.pop(tunnel.uuid)
+            await self.event.send(msg="server_disconnect", tunnel=server.uuid)
+            _logger.info(f"Close server {server.uuid}")
+            self.expose_servers.pop(server.uuid, None)
+            self.bridge_servers.pop(server.uuid, None)
 
     async def _request(self, reader: StreamReader, writer: StreamWriter) -> None:
         """Handle http requests and try to proxy them to the specific tunnel"""
@@ -233,14 +285,14 @@ class ProxyServer(api.APIMixin):
 
         # Find the right tunnel for the host
         tun_uuid = match.groups()[0].decode()
-        if tun_uuid not in self.tunnels:
+        if tun_uuid not in self.expose_servers:
             writer.write(b"%s 404 Not Found\r\n\r\n" % version)
             await writer.drain()
             await self.close(reader, writer)
             return
 
         # Get the tunnel and accept the client if set to HTTP protocol
-        tunnel = self.tunnels[tun_uuid]
+        tunnel = self.expose_servers[tun_uuid]
         if tunnel.protocol == base.ProtocolType.HTTP:
             await tunnel._client_accept(reader, writer, buf)
         else:
@@ -302,16 +354,6 @@ class ProxyServer(api.APIMixin):
 
     def get_state_dict(self) -> dict:
         """Generate a dictionary which shows the current state of the server"""
-        tunnels = {}
-        for tuuid, tunnel in self.tunnels.items():
-            tunnels[tuuid] = tunnel.get_state_dict()
-
-        http = {
-            "domain": self.http_domain,
-            "host": self.http_host,
-            "port": self.http_port,
-        }
-
         state = self.get_persistant_state_dict()
         # Stay compatible
         state["tokens"] = {
@@ -320,20 +362,33 @@ class ProxyServer(api.APIMixin):
         }
         return {
             **state,
-            "http": http if self.http_domain else {},
+            "http": {
+                "domain": self.http_domain,
+                "host": self.http_host,
+                "port": self.http_port,
+            }
+            if self.http_domain
+            else {},
             "tcp": {
                 "host": self.host,
                 "port": self.port,
             },
-            "tunnels": tunnels,
+            "exposes": {
+                tuuid: tunnel.get_state_dict()
+                for tuuid, tunnel in self.expose_servers.items()
+            },
+            "bridges": {
+                tuuid: tunnel.get_state_dict()
+                for tuuid, tunnel in self.bridge_servers.items()
+            },
         }
 
     async def disconnect(self, *uuids: str) -> bool:
         """Disconnect a specific tunnel or client"""
-        if len(uuids) < 1 or uuids[0] not in self.tunnels:
+        if len(uuids) < 1 or uuids[0] not in self.expose_servers:
             return False
 
-        tunnel = self.tunnels[uuids[0]]
+        tunnel = self.expose_servers[uuids[0]]
         if len(uuids) == 1:
             await tunnel.stop()
             return True
@@ -345,14 +400,14 @@ class ProxyServer(api.APIMixin):
 
         return False
 
-    def start(self) -> None:
+    async def start(self) -> None:
         """Start the server and event loop"""
         _logger.info("Starting server...")
-        asyncio.run(self.loop())
+        await self.loop()
 
     async def stop(self) -> None:
         """Stop the server and event loop"""
-        for tunnel in self.tunnels.values():
+        for tunnel in self.expose_servers.values():
             await tunnel.stop()
 
         if self.api:

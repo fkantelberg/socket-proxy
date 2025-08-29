@@ -1,49 +1,84 @@
 import asyncio
 import collections
-import logging
+import ssl
 from asyncio import StreamReader, StreamWriter
 from datetime import datetime, timedelta
 from ipaddress import ip_address
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Optional, Sequence, Tuple
 
-from . import base, package, tunnel, utils
+from . import api, base, package, tunnel, utils
 from .connection import Connection
 from .event import EventSystem
 
-_logger = logging.getLogger(__name__)
 
-
-class TunnelServer(tunnel.Tunnel):
+class ExposeServer(tunnel.Tunnel, api.APIMixin):
     """Server side of the tunnel to listen for external connections"""
 
     def __init__(
         self,
-        reader: StreamReader,
-        writer: StreamWriter,
         *,
-        event: EventSystem,
+        reader: Optional[StreamReader] = None,
+        writer: Optional[StreamWriter] = None,
+        tunnel: Optional[Connection] = None,
+        event: Optional[EventSystem] = None,
         domain: str = "",
         tunnel_host: Optional[str] = None,
         ports: Optional[Tuple[int, int]] = None,
-        protocols: Optional[List[base.ProtocolType]] = None,
+        bridge_token: Optional[str] = None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
-        self.host, self.port = writer.get_extra_info("peername")[:2]
-        self.tunnel: Connection = Connection(
-            reader, writer, token=utils.generate_token()
-        )
+        super().__init__(api_type=api.APIType.Bridge, **kwargs)
+
+        self.tunnel: Connection
+        if reader and writer:
+            self.host, self.port = writer.get_extra_info("peername")[:2]
+            self.tunnel = Connection(reader, writer)
+        elif tunnel:
+            self.host, self.port = tunnel.get_extra_info("peername")[:2]
+            self.tunnel = tunnel
+        else:
+            raise base.NoConnection()
+
         self.domain: str = f"{self.uuid}.{domain}" if domain else ""
         self.tunnel_host: Sequence[str] = tunnel_host.split(",") if tunnel_host else ""
         self.tunnel_port: Optional[int] = None
         self.ports: Optional[Tuple[int, int]] = ports
+        self.bridge_token: Optional[str] = bridge_token
         # Should by type Optional[asyncio.Server] but 3.8 fails
         self.server: Any = None
         self.connections: Dict[base.IPvXAddress, utils.Ban] = collections.defaultdict(
             utils.Ban
         )
-        self.protocols: List[base.ProtocolType] = protocols or utils.protocols()
-        self.event: EventSystem = event
+        self.event: Optional[EventSystem] = event
+
+    @classmethod
+    async def connect_bridge(
+        cls,
+        host: str,
+        port: int,
+        *,
+        bridge_token: str,
+        ca: str,
+        cert: Optional[str] = None,
+        key: Optional[str] = None,
+        tunnel_host: Optional[str] = None,
+        ports: Optional[Tuple[int, int]] = None,
+        **kwargs,
+    ) -> "ExposeServer":
+        sc: ssl.SSLContext = utils.generate_ssl_context(
+            cert=cert,
+            key=key,
+            ca=ca,
+            check_hostname=not base.config.no_verify_hostname,
+        )
+        tunnel = await Connection.connect(host, port, ssl=sc, **kwargs)
+
+        return cls(
+            tunnel=tunnel,
+            tunnel_host=tunnel_host,
+            ports=ports,
+            bridge_token=bridge_token,
+        )
 
     def block(self, ip: base.IPvXAddress) -> bool:
         """Decide whether the ip should be blocked"""
@@ -55,6 +90,10 @@ class TunnelServer(tunnel.Tunnel):
 
         return False
 
+    async def send(self, *, msg, **data) -> None:
+        if self.event:
+            await self.event.send(msg=msg, **data)
+
     async def idle(self) -> None:
         await super().idle()
 
@@ -63,7 +102,7 @@ class TunnelServer(tunnel.Tunnel):
         for ip, ban in list(self.connections.items()):
             if ban.first < dt:
                 self.connections.pop(ip)
-                _logger.info(f"Connection number of {ip} resetted")
+                self.info(f"Connection number of {ip} resetted")
 
     async def _client_accept(
         self,
@@ -81,8 +120,8 @@ class TunnelServer(tunnel.Tunnel):
             writer.close()
             await writer.wait_closed()
 
-            _logger.info(f"Connection from {ip} blocked")
-            await self.event.send(msg="client_blocked", tunnel=self.uuid, ip=str(ip))
+            self.info(f"Connection from {ip} blocked")
+            await self.send(msg="client_blocked", tunnel=self.uuid, ip=str(ip))
             return
 
         self.connections[ip].hits += 1
@@ -91,8 +130,8 @@ class TunnelServer(tunnel.Tunnel):
         client = Connection(reader, writer, self.protocol, utils.generate_token())
         self.add(client)
 
-        _logger.info(f"Client {client.uuid} connected on {host}:{port}")
-        await self.event.send(
+        self.info(f"Client {client.uuid} connected on {host}:{port}")
+        await self.send(
             msg="client_connect",
             tunnel=self.uuid,
             client=client.uuid,
@@ -122,7 +161,7 @@ class TunnelServer(tunnel.Tunnel):
 
     async def _disconnect_client(self, token: bytes) -> None:
         """Disconnect a client and generate an event"""
-        await self.event.send(
+        await self.send(
             msg="client_disconnect",
             tunnel=self.uuid,
             client=token.hex(),
@@ -163,25 +202,25 @@ class TunnelServer(tunnel.Tunnel):
         async with self.server:
             await self.server.serve_forever()
 
-    async def _handle(self) -> bool:
-        pkg = await self.tunnel.tun_read()
+    async def handle_package(self, pkg: package.Package) -> bool:
         # Start the server
         if isinstance(pkg, package.ConnectPackage):
             self.protocol = pkg.protocol
-            if self.protocol not in self.protocols:
-                self.error(f"Disabled protocol {self.protocol.name}")
-                return False
-
             self.info(f"Using protocol: {self.protocol.name}")
 
-            if self.protocol != base.ProtocolType.TCP:
+            if self.protocol == base.ProtocolType.HTTP:
                 self.info(f"Reachable with domain: {self.domain}")
                 await self.tunnel.tun_write(
                     package.InitPackage(self.token, [], self.domain)
                 )
             elif not await self._open_server():
-                return await super()._handle()
+                return await super().handle_package(pkg)
 
+            return True
+
+        # Information about the server
+        if isinstance(pkg, package.InfoPackage):
+            self.info(f"Connected with {pkg.name!r} [{pkg.version}]")
             return True
 
         # Handle configuration
@@ -212,11 +251,7 @@ class TunnelServer(tunnel.Tunnel):
             return True
 
         # Invalid package means to close the connection
-        if pkg is not None:
-            self.error(f"Invalid package: {pkg}")
-            return await super()._handle()
-
-        return await super()._handle()
+        return await super().handle_package(pkg)
 
     async def stop(self) -> None:
         """Stop everything"""
@@ -228,13 +263,29 @@ class TunnelServer(tunnel.Tunnel):
 
         self.info("closed")
 
+    async def start(self) -> None:
+        """Start the server and event loop"""
+        self.info("Starting server...")
+        await self.loop()
+
     async def loop(self) -> None:
         """Main loop of the proxy tunnel"""
         ssl_obj = self.tunnel.writer.get_extra_info("ssl_object")
         extra = f" [{ssl_obj.version()}]" if ssl_obj else ""
         self.info(f"Connected {self.host}:{self.port}{extra}")
 
+        # The API of the expose server is only allowed if run as bridge
+        # otherwise it's indirectly accessible through the API of the proxy server
+        if self.bridge_token and self.api_port:
+            asyncio.create_task(self.start_api())
+
         try:
+            if self.bridge_token:
+                # Connect to the correct bridge
+                pkg = package.BridgeLinkPackage(self.bridge_token)
+                await self.tunnel.tun_write(pkg)
+
+            await self.tunnel.tun_write(package.InfoPackage(base.VERSION, ""))
             await self._serve()
         finally:
             await self.stop()

@@ -18,6 +18,7 @@ _logger = logging.getLogger(__name__)
 class APIType(enum.IntEnum):
     Client = 0x01
     Server = 0x02
+    Bridge = 0x03
 
 
 async def run_app(

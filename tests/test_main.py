@@ -1,9 +1,8 @@
 import argparse
 from tempfile import NamedTemporaryFile
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
-
 from socket_proxy import __main__ as main
 from socket_proxy import base
 
@@ -35,28 +34,31 @@ def test_parser():
         assert args.ban_time == 60
 
 
+@pytest.mark.asyncio
 @patch("socket_proxy.__main__.TunnelClient")
 @patch("socket_proxy.__main__.GUIClient")
-def test_run_client(gui_mock, tunnel_mock):
+async def test_run_client(gui_mock, tunnel_mock):
     with patch("sys.exit", side_effect=[AssertionError]) as mock:
         with pytest.raises(AssertionError):
-            main.run_client(False)
+            await main.run_client(False)
         mock.assert_called_once_with(1)
 
+    gui_mock.return_value.start = AsyncMock()
     gui_mock.assert_not_called()
+    tunnel_mock.return_value.start = AsyncMock()
     tunnel_mock.assert_not_called()
 
     base.config.ca = True
     base.config.dst = "", 80
     base.config.connect = "", 2773
 
-    main.run_client(True)
+    await main.run_client(True)
     gui_mock.assert_not_called()
     tunnel_mock.assert_called_once()
     tunnel_mock.return_value.start.assert_called_once()
     tunnel_mock.reset_mock()
 
-    main.run_client(False)
+    await main.run_client(False)
     tunnel_mock.assert_not_called()
     gui_mock.assert_called_once()
     gui_mock.return_value.start.assert_called_once()
@@ -64,20 +66,41 @@ def test_run_client(gui_mock, tunnel_mock):
 
 
 @patch("socket_proxy.__main__.ProxyServer")
-def test_run_server(proxy_mock):
+@pytest.mark.asyncio
+async def test_run_server(proxy_mock):
     with patch("sys.exit", side_effect=[AssertionError]) as mock:
         with pytest.raises(AssertionError):
-            main.run_server()
+            await main.run_server()
         mock.assert_called_once_with(1)
 
+    proxy_mock.return_value.start = AsyncMock()
     proxy_mock.assert_not_called()
 
     base.config.cert = True
     base.config.key = True
 
-    main.run_server()
+    await main.run_server()
     proxy_mock.assert_called_once()
     proxy_mock.return_value.start.assert_called_once()
+
+
+@patch("socket_proxy.__main__.ExposeServer", new_callable=AsyncMock)
+@pytest.mark.asyncio
+async def test_run_bridge(expose_mock):
+    with patch("sys.exit", side_effect=[AssertionError]) as mock:
+        with pytest.raises(AssertionError):
+            await main.run_bridge()
+        mock.assert_called_once_with(1)
+
+    expose_mock.connect_bridge.assert_not_called()
+
+    base.config.ca = True
+    base.config.connect = "", 2773
+    base.config.bridge = b"test"
+
+    await main.run_bridge()
+    expose_mock.connect_bridge.assert_called_once()
+    expose_mock.connect_bridge.return_value.start.assert_called_once()
 
 
 @patch("socket_proxy.__main__.run_client")

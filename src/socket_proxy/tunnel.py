@@ -50,6 +50,9 @@ class Tunnel:
     def __getitem__(self, token: bytes) -> Connection:
         return self.clients[token]
 
+    def get_extra_info(self, name: str, default: Any = None) -> Any:
+        return self.tunnel.get_extra_info(name, default=default)
+
     @property
     def token(self) -> bytes:
         return self.tunnel.token
@@ -110,6 +113,9 @@ class Tunnel:
     def info(self, msg: str, *args: Any) -> None:
         _logger.info(f"Tunnel {self.uuid} {msg}", *args)
 
+    def warning(self, msg: str, *args: Any) -> None:
+        _logger.warning(f"Tunnel {self.uuid} {msg}", *args)
+
     def error(self, msg: str, *args: Any) -> None:
         _logger.error(f"Tunnel {self.uuid} {msg}", *args)
 
@@ -169,25 +175,32 @@ class Tunnel:
         if self.tunnel:
             await self.tunnel.close()
 
-    async def _handle(self) -> bool:
+    async def handle(self) -> bool:
         """Basic handler of the tunnel. Return False to leave the main loop"""
+        pkg = await self.tunnel.tun_read()
+        if not pkg:
+            return False
+
+        return await self.handle_package(pkg)
+
+    async def handle_package(self, pkg: package.Package) -> bool:  # pylint: disable=W0613
         return False
 
     async def _serve(self) -> None:
         """Main tunnel loop"""
         asyncio.create_task(self._interval())
 
-        while await self._handle():
+        while await self.handle():
             pass
 
     async def _send_config(self) -> None:
         """Send the current configuration as a package through the tunnel"""
         pkg = package.ConfigPackage(
-            self.bantime,
-            self.max_clients,
-            self.max_connects,
-            self.idle_timeout,
-            self.networks,
+            bantime=self.bantime,
+            clients=self.max_clients,
+            connects=self.max_connects,
+            idle_timeout=self.idle_timeout,
+            networks=self.networks,
         )
         await self.tunnel.tun_write(pkg)
 

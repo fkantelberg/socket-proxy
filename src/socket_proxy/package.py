@@ -1,7 +1,7 @@
 import ipaddress
 import logging
 import struct
-from typing import Any, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from . import base
 
@@ -12,7 +12,7 @@ except ImportError:
 
 
 _logger = logging.getLogger(__name__)
-_package_registry = {}
+_package_registry: Dict[int, "MetaPackage"] = {}
 
 
 class Reader(Protocol):
@@ -25,8 +25,8 @@ class MetaPackage(type):
     """Meta class to register new packages using the type"""
 
     def __new__(metacls, name, bases, attrs):
-        ptype = attrs["_type"]
-        if ptype in _package_registry:
+        ptype = attrs.get("_type", None)
+        if ptype and ptype in _package_registry:
             raise base.DuplicatePackageType()
 
         cls = super().__new__(metacls, name, bases, attrs)
@@ -74,7 +74,7 @@ class PackageStruct(struct.Struct):
     @classmethod
     async def read_string(cls, reader: Reader) -> str:
         (length,) = await cls("!I").read(reader)
-        return (await reader.readexactly(length)).decode()
+        return (await reader.readexactly(length)).decode() if length else ""
 
 
 class Package(metaclass=MetaPackage):
@@ -86,13 +86,16 @@ class Package(metaclass=MetaPackage):
 
     _name: Optional[str] = None
     _type: int = 0x00
-    __slots__ = ()
+    __slots__: Tuple[str, ...] = ()
 
     HEADER = PackageStruct("!B")
 
     def to_bytes(self) -> bytes:
         """Transform a package to bytes"""
         return self.HEADER.pack(self._type)
+
+    def __repr__(self) -> str:
+        return f"<Package [{self._name}]>"
 
     # pylint: disable=W0613
     @classmethod
@@ -117,14 +120,14 @@ class Package(metaclass=MetaPackage):
 
 
 class ConnectPackage(Package):
-    """Package to configure/start the server site
+    """Package to configure/start the server site of an expose server
 
     Structure: <SUPER> <protocol>
     """
 
-    _name = "connect"
-    _type = 0x01
-    __slots__ = ("protocol",)
+    _name: Optional[str] = "connect"
+    _type: int = 0x01
+    __slots__: Tuple[str, ...] = ("protocol",)
 
     PROTOCOL = PackageStruct("!B")
 
@@ -148,9 +151,9 @@ class PingPackage(Package):
     Structure: <SUPER> <time>
     """
 
-    _name = "ping"
-    _type = 0x02
-    __slots__ = ("time",)
+    _name: Optional[str] = "ping"
+    _type: int = 0x02
+    __slots__: Tuple[str, ...] = ("time",)
 
     TIMESTAMP = PackageStruct("!d")
 
@@ -173,9 +176,9 @@ class AuthPackage(Package):
     Structure: <SUPER> <length of token> <token> <token type>
     """
 
-    _name = "auth"
-    _type = 0x03
-    __slots__ = ("token", "token_type")
+    _name: Optional[str] = "auth"
+    _type: int = 0x03
+    __slots__: Tuple[str, ...] = ("token", "token_type")
 
     def __init__(self, token: str, token_type: base.AuthType, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -197,7 +200,41 @@ class AuthPackage(Package):
         return (token, base.AuthType(token_type)) + res
 
 
-class InitPackage(Package):
+class InfoPackage(Package):
+    """Package to exchange some information about the own side
+
+    Structure: <SUPER> <version> <name>
+    """
+
+    _name: Optional[str] = "info"
+    _type: int = 0x04
+    __slots__: Tuple[str, ...] = ("version", "name")
+
+    def __init__(self, version: str, name: str, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.version = version
+        self.name = name
+
+    def to_bytes(self) -> bytes:
+        return (
+            super().to_bytes()
+            + PackageStruct.pack_string(self.version)
+            + PackageStruct.pack_string(self.name)
+        )
+
+    @classmethod
+    async def recv(cls, reader: Reader) -> Tuple[Any, ...]:
+        res = await super().recv(reader)
+        version = await PackageStruct.read_string(reader)
+        name = await PackageStruct.read_string(reader)
+        return (version, name) + res
+
+
+class ExposePackage(Package):
+    """Pseudo package for expose servers to structure the package classes"""
+
+
+class InitPackage(ExposePackage):
     """Package to initialize the tunnel which sends the external port. The number of
     addresses is limitted to 255
 
@@ -205,9 +242,9 @@ class InitPackage(Package):
                (<type of port> <external port>)* <length of domain> <domain>
     """
 
-    _name = "init"
-    _type = 0x10
-    __slots__ = ("token", "addresses", "domain")
+    _name: Optional[str] = "expose>init"
+    _type: int = 0x10
+    __slots__: Tuple[str, ...] = ("token", "addresses", "domain")
 
     INIT = PackageStruct(f"!{base.CLIENT_NAME_SIZE}sB")
     ADDRESS = PackageStruct("!BH")
@@ -256,17 +293,62 @@ class InitPackage(Package):
         return (token, addresses, domain) + res
 
 
+class BridgePackage(Package):
+    """Pseudo package for bridge servers to structure the package classes"""
+
+
+class BridgeInitPackage(BridgePackage):
+    """Package to initialize the tunnel which sends the token to connect to the
+    bridge
+
+    Structure: <SUPER> <length of token> <token>
+    """
+
+    _name: Optional[str] = "bridge>init"
+    _type: int = 0x21
+    __slots__: Tuple[str, ...] = ("token",)
+
+    def __init__(self, token: str, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.token: str = token
+
+    def to_bytes(self) -> bytes:
+        return super().to_bytes() + PackageStruct.pack_string(self.token)
+
+    @classmethod
+    async def recv(cls, reader: Reader) -> Tuple[Any, ...]:
+        res = await super().recv(reader)
+        token = await PackageStruct.read_string(reader)
+        return (token,) + res
+
+
+class BridgeLinkPackage(BridgeInitPackage):
+    """Package to link to a bridge using the shared token
+
+    Structure: <SUPER> <length of token> <token>
+    """
+
+    _name: Optional[str] = "bridge>link"
+    _type: int = 0x22
+
+
 class ConfigPackage(Package):
     """Package to inform about configurations. This package will be send between
     both sides of the tunnel to negotiate the configuration by using the minimum
     from each side or the maximum if one of the configuration is 0
 
-    Structure: <SUPER> <connects>
+    Structure: <SUPER> <config> <length of networks> <networks>
     """
 
-    _name = "config"
-    _type = 0x11
-    __slots__ = ("bantime", "clients", "connects", "idle_timeout", "networks")
+    _name: Optional[str] = "config"
+    _type: int = 0x11
+    __slots__: Tuple[str, ...] = (
+        "bantime",
+        "clients",
+        "connects",
+        "idle_timeout",
+        "networks",
+    )
 
     CONFIG = PackageStruct("!IIIII")
 
@@ -279,7 +361,7 @@ class ConfigPackage(Package):
         networks: base.IPvXNetworks,
         *args,
         **kwargs,
-    ):
+    ):  # pylint: disable=R0917
         super().__init__(*args, **kwargs)
         self.bantime: int = bantime
         self.clients: int = clients
@@ -315,9 +397,9 @@ class ClientPackage(Package):
     Structure: <SUPER> <client token>
     """
 
-    _name = "client"
-    _type = 0x30
-    __slots__ = ("token",)
+    _name: Optional[str] = "client"
+    _type: int = 0x30
+    __slots__: Tuple[str, ...] = ("token",)
 
     TOKEN = PackageStruct(f"!{base.CLIENT_NAME_SIZE}s")
 
@@ -340,9 +422,9 @@ class ClientInitPackage(ClientPackage):
     Structure: <SUPER> <ip type> <client port> <client ip>
     """
 
-    _name = "client>init"
-    _type = 0x31
-    __slots__ = ("ip", "port")
+    _name: Optional[str] = "client>init"
+    _type: int = 0x31
+    __slots__: Tuple[str, ...] = ("ip", "port")
 
     IP = PackageStruct("!BH")
 
@@ -369,9 +451,9 @@ class ClientClosePackage(ClientPackage):
     Structure: <SUPER>
     """
 
-    _name = "client>close"
-    _type = 0x32
-    __slots__ = ()
+    _name: Optional[str] = "client>close"
+    _type: int = 0x32
+    __slots__: Tuple[str, ...] = ()
 
 
 class ClientDataPackage(ClientPackage):
@@ -381,9 +463,9 @@ class ClientDataPackage(ClientPackage):
     Structure: <SUPER> <data length> <data>
     """
 
-    _name = "client>data"
-    _type = 0x33
-    __slots__ = ("data",)
+    _name: Optional[str] = "client>data"
+    _type: int = 0x33
+    __slots__: Tuple[str, ...] = ("data",)
 
     MAX_SIZE = 65536
     DATA = PackageStruct("!I")

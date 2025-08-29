@@ -126,11 +126,11 @@ class GUIClient(TunnelClient):
         for y, line in enumerate(lines[:h]):
             win.addstr(y + 1, 2, line[:w])
 
-    async def _handle(self) -> bool:
+    async def handle(self) -> bool:
         """Handle the drawing after each package"""
         self.get_dimension()
         self._draw()
-        return await super()._handle()
+        return await super().handle()
 
     def _gui(self, scr: Any) -> None:
         """Configure the main screen"""
@@ -138,7 +138,6 @@ class GUIClient(TunnelClient):
         curses.noecho()
         curses.curs_set(0)
 
-        super().start()
-
-    def start(self) -> None:
+    async def start(self) -> None:
         curses.wrapper(self._gui)
+        await super().start()

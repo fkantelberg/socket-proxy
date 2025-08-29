@@ -5,7 +5,6 @@ from tempfile import NamedTemporaryFile
 from unittest import mock
 
 import pytest
-
 from socket_proxy import Tunnel, TunnelClient, base, connection, package, proxy
 
 from .common import (
@@ -13,6 +12,7 @@ from .common import (
     CLIENT_CERT,
     CLIENT_KEY,
     client,
+    connect_and_send,
     echo_server,
     http_client,
     http_server,
@@ -153,16 +153,6 @@ async def test_close_exception():
 
 @pytest.mark.asyncio
 async def test_tunnel_with_dummy():
-    async def connect_and_send(ip, port, text):
-        reader, writer = await asyncio.open_connection(ip, port)
-        writer.write(text)
-        await writer.drain()
-
-        data = await reader.read(1024)
-        writer.close()
-        await writer.wait_closed()
-        return data
-
     # End to end test with an echo server
     port, dst_port = unused_ports(2)
     async with echo_server(dst_port) as echo, server(port) as srv, client(
@@ -170,11 +160,8 @@ async def test_tunnel_with_dummy():
     ) as cli:
         await asyncio.sleep(0.1)
         assert cli.addr
-        for ip_type, port in cli.addr:
-            if ip_type == base.InternetType.IPv4:
-                assert await connect_and_send("127.0.0.1", port, b"abc") == b"abc"
-            elif ip_type == base.InternetType.IPv6:
-                assert await connect_and_send("::1", port, b"abc") == b"abc"
+        for ip, port in cli.addr:
+            assert await connect_and_send(str(ip), port, b"abc") == b"abc"
 
         # Close the echo server
         echo.close()
@@ -182,11 +169,8 @@ async def test_tunnel_with_dummy():
 
         await asyncio.sleep(0.1)
 
-        for ip_type, port in cli.addr:
-            if ip_type == base.InternetType.IPv4:
-                assert await connect_and_send("127.0.0.1", port, b"abc") == b""
-            elif ip_type == base.InternetType.IPv6:
-                assert await connect_and_send("::1", port, b"abc") == b""
+        for ip, port in cli.addr:
+            assert await connect_and_send(str(ip), port, b"abc") == b""
 
         await srv.stop()
         await asyncio.sleep(0.1)
@@ -223,12 +207,12 @@ async def test_http_tunnel_with_dummy():
         request = b"GET / HTTP/1.1\r\nHost: test.example.org\r\n\r\n"
         assert await connect_and_send(request) == b"HTTP/1.1 404 Not Found\r\n\r\n"
 
-        assert srv.tunnels
-        token = list(srv.tunnels)[0]
+        assert srv.expose_servers
+        token = list(srv.expose_servers)[0]
         request = b"GET / HTTP/1.1\r\nHost: %s.example.org\r\n\r\n" % token.encode()
         assert await connect_and_send(request) == request
 
-        srv.tunnels[token].protocol = base.ProtocolType.TCP
+        srv.expose_servers[token].protocol = base.ProtocolType.TCP
         assert await connect_and_send(request) == b"HTTP/1.1 404 Not Found\r\n\r\n"
 
         # Close the echo server
@@ -249,24 +233,23 @@ async def test_proxy_tunnel_limit():
         await asyncio.sleep(0.1)
 
         srv.max_tunnels = 1
-        srv.tunnels = {b"\x00": mock.AsyncMock()}
+        srv.expose_servers = {b"\x00": mock.AsyncMock()}
 
         await srv._accept(reader, writer)
-        assert len(srv.tunnels) == 1
+        assert len(srv.expose_servers) == 1
 
 
-def test_start_functions():
+@pytest.mark.asyncio
+async def test_start_functions():
     port, dst_port = unused_ports(2)
 
     srv = proxy.ProxyServer("", port, cert=None, key=None)
     srv.loop = mock.AsyncMock()
-    srv.start()
-    assert srv.loop.call_count
+    await srv.start()
 
-    cli = TunnelClient("", port, "", dst_port, None)
+    cli = TunnelClient("", port, "", dst_port, ca=None)
     cli.loop = mock.AsyncMock()
-    cli.start()
-    assert cli.loop.call_count
+    await cli.start()
 
 
 @pytest.mark.asyncio
@@ -333,7 +316,7 @@ async def test_tunnel_client():
     cli.token = b"\x00" * base.CLIENT_NAME_SIZE
     cli.read.return_value = None
 
-    tclient = TunnelClient("", port, "", dst_port, None)
+    tclient = TunnelClient("", port, "", dst_port, ca=None)
     tclient._disconnect_client = mock.AsyncMock()
     tclient.add(cli)
     tclient.tunnel = mock.AsyncMock()
@@ -360,11 +343,11 @@ async def test_tunnel_client():
     # Invalid package on the tunnel
     tclient.tunnel.tun_read = mock.AsyncMock()
     tclient.tunnel.tun_read.return_value = None
-    assert await tclient._handle() is False
+    assert await tclient.handle() is False
     assert tclient.tunnel.tun_read.call_count
 
     tclient.tunnel.tun_read.return_value = package.Package()
-    assert await tclient._handle() is False
+    assert await tclient.handle() is False
 
 
 @pytest.mark.asyncio
@@ -389,7 +372,7 @@ async def test_tunnel_ping():
         # Server sends pong and last_pong updates
         pkg = package.PingPackage(cli.last_ping + 1000)
         cli.last_ping = cli.last_pong = None
-        await srv.tunnels[cli.uuid].tunnel.tun_write(pkg)
+        await srv.expose_servers[cli.uuid].tunnel.tun_write(pkg)
         await asyncio.sleep(0.1)
         assert cli._check_alive() is True
         assert cli.last_pong
