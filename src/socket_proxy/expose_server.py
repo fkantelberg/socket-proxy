@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from ipaddress import ip_address
 from typing import Any, Dict, Optional, Sequence, Tuple
 
-from . import api, base, package, tunnel, utils
+from . import api, base, package, tunnel, utils  # pylint: disable=E0401
 from .connection import Connection
 from .event import EventSystem
 
@@ -285,7 +285,7 @@ class ExposeServer(tunnel.Tunnel, api.APIMixin):
                 pkg = package.BridgeLinkPackage(self.bridge_token)
                 await self.tunnel.tun_write(pkg)
 
-            await self.tunnel.tun_write(package.InfoPackage(base.VERSION, ""))
+            await self.tunnel.tun_write(package.InfoPackage(base.__version__, ""))
             await self._serve()
         finally:
             await self.stop()

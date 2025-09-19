@@ -4,7 +4,7 @@ import ssl
 import time
 from typing import Any, Optional, Sequence, Tuple
 
-from . import api, base, package, tunnel, utils
+from . import api, base, package, tunnel, utils  # pylint: disable=E0401
 from .connection import Connection
 
 _logger = logging.getLogger(__name__)
@@ -233,7 +233,9 @@ class TunnelClient(tunnel.Tunnel, api.APIMixin):
                 await self.tunnel.tun_write(pkg)
 
             await self.tunnel.tun_write(package.ConnectPackage(self.protocol))
-            await self.tunnel.tun_write(package.InfoPackage(base.VERSION, self.name))
+            await self.tunnel.tun_write(
+                package.InfoPackage(base.__version__, self.name)
+            )
             await self._serve()
         finally:
             self.running = False

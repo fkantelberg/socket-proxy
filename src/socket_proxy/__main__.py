@@ -8,7 +8,7 @@ from argparse import Namespace
 from configparser import ConfigParser
 from typing import Optional, Tuple
 
-from . import api, base, event, utils
+from . import api, base, event, utils  # pylint: disable=E0401
 from .expose_server import ExposeServer
 from .proxy import ProxyServer
 from .tunnel_client import TunnelClient
@@ -498,11 +498,11 @@ async def run_bridge() -> None:
 def main(args: Optional[Tuple[str]] = None) -> None:
     base.config = parse_args(args, namespace=base.config)
     if base.config.version:
-        print(base.VERSION)
+        print(base.__version__)
         return
 
     utils.configure_logging(base.config.log_file, base.config.log_level)
-    _logger.info(f"Version: {base.VERSION}")
+    _logger.info(f"Version: {base.__version__}")
 
     try:
         if base.config.mode == "server":

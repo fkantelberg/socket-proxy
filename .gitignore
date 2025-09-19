@@ -11,3 +11,4 @@ build/
 dist/
 htmlcov
 pki/
+src/socket_proxy/version.py

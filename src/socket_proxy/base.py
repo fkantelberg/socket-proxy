@@ -6,9 +6,14 @@ import os
 from datetime import datetime
 from typing import Any, Optional, Sequence, Tuple
 
-_logger = logging.getLogger(__name__)
+try:
+    # pylint: disable=W0611
+    from .version import version as __version__, version_tuple
+except ImportError:
+    version = __version__ = "unknown"
+    version_tuple = (0, 0, "unknown")
 
-VERSION = "6.0.0"
+_logger = logging.getLogger(__name__)
 
 CLIENT_NAME_SIZE = 8
 EVENT_TIMEOUT = 0.5

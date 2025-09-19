@@ -1,4 +1,4 @@
-from .base import VERSION, config
+from .base import __version__, config, version_tuple
 from .bridge_server import BridgeServer
 from .connection import Connection
 from .expose_server import ExposeServer

@@ -1,6 +1,37 @@
 [build-system]
-requires = [ "setuptools >= 35.0.2", "wheel >= 0.29.0"]
 build-backend = "setuptools.build_meta"
+requires = [
+  "setuptools>=80",
+  "setuptools-scm[toml]>=8",
+]
+
+[project]
+name = "socket-proxy"
+dynamic = ["version"]
+requires-python = ">= 3.9"
+authors = [
+  {name = "Florian Kantelberg", email = "florian.kantelberg@mailbox.org"},
+]
+description = "Proxy TCP ports of local systems"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+keywords = ["proxy", "socket", "network"]
+urls.source = "https://github.com/fkantelberg/socket-proxy"
+classifiers = [
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+]
+dependencies = [
+  "typing_extensions",
+]
+
+[project.optional-dependencies]
+api = ["aiohttp"]
+event = ["aiohttp"]
+
+[project.scripts]
+socket_proxy = "socket_proxy.__main__:main"
 
 [tool.coverage]
 omit = "*/tunnel_gui.py"
@@ -16,13 +47,13 @@ use_parentheses = true
 line_length = 88
 
 [tool.mypy]
-disable_error_code = "attr-defined,import,union-attr"
+disable_error_code = ["attr-defined", "import", "union-attr"]
 
 [tool.pylint.main]
-ignored-modules = "aiohttp,nox,pytest,socket_proxy"
+ignored-modules = ["aiohttp", "nox", "pytest", "socket_proxy"]
 
 [tool.pylint.imports]
-ignored-modules = "aiohttp,nox,pytest,socket_proxy"
+ignored-modules = ["aiohttp", "nox", "pytest", "socket_proxy"]
 
 [tool.pylint."messages control"]
 disable = """
@@ -71,3 +102,12 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 timeout = 5
 log_level = "info"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools_scm]
+version_file = "src/socket_proxy/version.py"
